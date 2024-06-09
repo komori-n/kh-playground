@@ -18,3 +18,12 @@ TEST(PeriodicAlarm, Tick) {
       std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - next_tp).count();
   EXPECT_NEAR(diff, 0, 5);
 }
+
+TEST(PeriodicAlarm, Infinite) {
+  PeriodicAlarm alarm{};
+
+  alarm.Start(std::numeric_limits<std::uint64_t>::max());
+  for (int i = 0; i < 100; ++i) {
+    EXPECT_FALSE(alarm.Tick());
+  }
+}
