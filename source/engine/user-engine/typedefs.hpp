@@ -100,6 +100,36 @@ constexpr inline T SaturatedAdd(T lhs, T rhs) noexcept {
 }
 
 /**
+ * @brief `T` 型の値を引き、計算結果を `T` 型の範囲に丸める
+ * @tparam T  整数型
+ * @param lhs 左辺の値
+ * @param rhs 右辺の値
+ * @return `lhs - rhs` を `T` 型の範囲に丸めた値
+ */
+template <typename T>
+constexpr inline T SaturatedSubtract(T lhs, T rhs) noexcept {
+  static_assert(std::is_integral_v<T>);
+
+#if defined(__has_builtin) && __has_builtin(__builtin_sub_overflow)
+  T result{};
+  const bool overflow = __builtin_sub_overflow(lhs, rhs, &result);
+  if (overflow) {
+    return rhs > 0 ? std::numeric_limits<T>::min() : std::numeric_limits<T>::max();
+  } else {
+    return result;
+  }
+#else
+  if (rhs > 0 && lhs < std::numeric_limits<T>::min() + rhs) {
+    return std::numeric_limits<T>::min();
+  } else if (rhs < 0 && lhs > std::numeric_limits<T>::max() + rhs) {
+    return std::numeric_limits<T>::max();
+  }
+
+  return lhs - rhs;
+#endif
+}
+
+/**
  * @brief `T` 型の値を掛け合わせ、計算結果を `T` 型の範囲に丸める
  * @tparam T  整数型
  * @param lhs 左辺の値

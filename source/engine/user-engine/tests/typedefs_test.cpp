@@ -10,6 +10,7 @@ using komori::OrdinalNumber;
 using komori::Phi;
 using komori::SaturatedAdd;
 using komori::SaturatedMultiply;
+using komori::SaturatedSubtract;
 using komori::ToString;
 
 namespace {
@@ -40,6 +41,22 @@ TYPED_TEST(SaturationTest, SaturatedAdd) {
     EXPECT_EQ(SaturatedAdd<TypeParam>(kMax, kMin), kMax + kMin);
     EXPECT_EQ(SaturatedAdd<TypeParam>(kMin, -1), kMin);
     EXPECT_EQ(SaturatedAdd<TypeParam>(kMin, 1), kMin + 1);
+  }
+}
+
+TYPED_TEST(SaturationTest, SaturatedSubtract) {
+  constexpr TypeParam kMin = std::numeric_limits<TypeParam>::min();
+  constexpr TypeParam kMax = std::numeric_limits<TypeParam>::max();
+
+  EXPECT_EQ(SaturatedSubtract<TypeParam>(33, 4), 33 - 4);
+  EXPECT_EQ(SaturatedSubtract<TypeParam>(kMin, 1), kMin);
+
+  if constexpr (std::is_signed_v<TypeParam>) {
+    EXPECT_EQ(SaturatedSubtract<TypeParam>(-33, -4), -33 + 4);
+    EXPECT_EQ(SaturatedSubtract<TypeParam>(kMin, kMax), kMin);
+    EXPECT_EQ(SaturatedSubtract<TypeParam>(kMax, kMin), kMax);
+    EXPECT_EQ(SaturatedSubtract<TypeParam>(kMin, 1), kMin);
+    EXPECT_EQ(SaturatedSubtract<TypeParam>(kMin, -1), kMin + 1);
   }
 }
 
