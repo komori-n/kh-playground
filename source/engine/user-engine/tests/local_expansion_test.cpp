@@ -15,9 +15,9 @@ using komori::detail::CheckObviousFinalOrNode;
 namespace {
 TEST(CheckObviousFinalOrNode, Ambiguous) {
   const std::vector<std::string> tests{
-      "k8/9/9/9/9/9/9/9/9 b P2r2b4g4s4n4l17p 1",
-      "k8/9/9/9/9/9/9/9/9 b G2r2b3g4s4n4l18p 1",
-      "k8/9/G8/9/9/9/9/9/9 b 2r2b3g4s4n4l18p 1",
+      "k8/9/9/9/9/9/9/9/8P b P2r2b4g4s4n4l16p 1",
+      "k8/9/9/9/9/9/9/9/8P b G2r2b3g4s4n4l17p 1",
+      "k8/9/G8/9/9/9/9/9/8P b 2r2b3g4s4n4l17p 1",
   };
 
   for (const auto& s : tests) {

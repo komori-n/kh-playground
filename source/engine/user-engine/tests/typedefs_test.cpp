@@ -139,6 +139,25 @@ TEST(OrdinalNumberTest, All) {
   EXPECT_EQ(OrdinalNumber(124), "124th");
 }
 
+TEST(DoesHaveMatePossibilityTest, NoOurPiece) {
+  TestNode node{"4k4/9/9/9/9/9/9/9/9 b 4G4S18P2r2b4n4l 1", true};
+  EXPECT_FALSE(komori::DoesHaveMatePossibility(node->Pos()));
+
+  // 飛び道具がある
+  TestNode node2{"4k4/9/9/9/9/9/9/9/9 b 4G4S18PRr2b4n4l 1", true};
+  EXPECT_TRUE(komori::DoesHaveMatePossibility(node2->Pos()));
+  TestNode node3{"4k4/9/9/9/9/9/9/9/9 b 4G4S18PB2rb4n4l 1", true};
+  EXPECT_TRUE(komori::DoesHaveMatePossibility(node3->Pos()));
+  TestNode node4{"4k4/9/9/9/9/9/9/9/9 b 4G4S18PN2rb3n4l 1", true};
+  EXPECT_TRUE(komori::DoesHaveMatePossibility(node4->Pos()));
+  TestNode node5{"4k4/9/9/9/9/9/9/9/9 b 4G4S18PL2rb4n3l 1", true};
+  EXPECT_TRUE(komori::DoesHaveMatePossibility(node5->Pos()));
+
+  // 盤上に自分の駒がある
+  TestNode node6{"4k4/9/9/9/9/9/9/9/8P b 4G4S17P2r2b4n4l 1", true};
+  EXPECT_TRUE(komori::DoesHaveMatePossibility(node6->Pos()));
+}
+
 TEST(DoesHaveMatePossibilityTest, BoardPiece) {
   TestNode node{"4k4/9/4P4/PPPP1PPPP/9/9/9/9/9 b 2r2b4g4s4n4l9p 1", true};
   EXPECT_TRUE(komori::DoesHaveMatePossibility(node->Pos()));
@@ -148,9 +167,9 @@ TEST(DoesHaveMatePossibilityTest, BoardPiece) {
 }
 
 TEST(DoesHaveMatePossibilityTest, DoublePawnCheck) {
-  TestNode node{"4k4/9/9/9/9/9/9/9/9 b P2r2b4g4s4n4l17p 1", true};
+  TestNode node{"4k4/9/9/9/9/9/9/9/8P b P2r2b4g4s4n4l16p 1", true};
   EXPECT_TRUE(komori::DoesHaveMatePossibility(node->Pos()));
 
-  TestNode node2{"4k4/9/9/9/9/9/9/9/4P4 b P2r2b4g4s4n4l16p 1", true};
+  TestNode node2{"4k4/9/9/9/9/9/9/9/4P3P b P2r2b4g4s4n4l15p 1", true};
   EXPECT_FALSE(komori::DoesHaveMatePossibility(node2->Pos()));
 }

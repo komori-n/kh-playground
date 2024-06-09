@@ -313,10 +313,10 @@ inline std::string OrdinalNumber(Integer i) {
  * @return `true`: 不明
  * @return `false`: 確実に不詰
  *
- * 指し手生成をすることなく `n` の合法手がない、すなわち不詰局面かどうかを判定する。`generateMoves` よりも
- * 厳密性は劣るが、より高速に不詰を判定できる可能性がある。
+ * 指し手生成をすることなく `n` が不詰局面かどうかを判定する。`generateMoves` よりも厳密性は劣るが、
+ * より高速に不詰を判定できる可能性がある。
  *
- * この関数の戻り値が `false` のとき、`n` には合法手が存在しない。戻り値が `true` のとき、不詰かどうかは不明である。
+ * この関数の戻り値が `false` のとき、`n` は確実に詰まない。戻り値が `true` のとき、不詰かどうかは不明である。
  * 戻り値が `true` であっても、現局面に合法手が存在しない可能性があるので注意。
  */
 inline bool DoesHaveMatePossibility(const Position& n) {
@@ -325,6 +325,16 @@ inline bool DoesHaveMatePossibility(const Position& n) {
   const auto hand = n.hand_of(us);
   const auto king_sq = n.king_square(them);
   const auto droppable_bb = ~n.pieces();
+
+  if (n.pieces(us).pop_count() == 0) {
+    // 無仕掛け玉で、長い利きを持つ駒がない場合は絶対に詰まない
+    constexpr Hand kLongEffectMask = static_cast<Hand>(PIECE_BIT_MASK2[ROOK] | PIECE_BIT_MASK2[BISHOP] |
+                                                       PIECE_BIT_MASK2[LANCE] | PIECE_BIT_MASK2[KNIGHT]);
+    if ((hand & kLongEffectMask) == 0) {
+      return false;
+    }
+  }
+
   KOMORI_HAND_LOOP_UNROLL for (PieceType pr = PIECE_HAND_ZERO; pr < PIECE_HAND_NB; ++pr) {
     if (hand_exists(hand, pr)) {
       if (pr == PAWN && (n.pieces(us, PAWN) & file_bb(file_of(king_sq)))) {
