@@ -548,8 +548,8 @@ CPPFLAGS += -D$(YANEURAOU_EDITION) -DTARGET_CPU=\"$(TARGET_CPU)\" $(EXTRA_CPPFLA
 OBJECTS  = $(addprefix $(OBJDIR)/, $(SOURCES:.cpp=.o))
 DEPENDS  = $(OBJECTS:.o=.d)
 
-all: clean $(TARGET)
-.PHONY : all normal evallearn tournament prof profgen profuse pgo clean
+all: normal
+.PHONY : all normal clean
 
 $(TARGET): $(OBJECTS) $(LIBS)
 	$(COMPILER) -o $@ $^ $(CPPFLAGS) $(LDFLAGS)
@@ -566,35 +566,6 @@ $(OBJDIR)/%.o: %.cpp
 # 通常使用。
 normal:
 	$(MAKE) CPPFLAGS='$(CPPFLAGS) $(LTOFLAGS)' LDFLAGS='$(LDFLAGS) $(LTOFLAGS)' $(TARGET)
-
-# 学習用。openmp , openblasなどを有効にする。
-evallearn:
-	$(MAKE) CPPFLAGS='$(CPPFLAGS) $(LTOFLAGS) $(OPENMP) $(BLAS_CPPFLAGS) -DEVAL_LEARN' LDFLAGS='$(LDFLAGS) $(OPENMP_LDFLAGS) $(BLAS_LDFLAGS) $(LTOFLAGS)' $(TARGET)
-
-# トーナメント用
-tournament:
-	$(MAKE) CPPFLAGS='$(CPPFLAGS) $(LTOFLAGS) -DFOR_TOURNAMENT' LDFLAGS='$(LDFLAGS) $(LTOFLAGS)' $(TARGET)
-
-# 教師棋譜生成用(開発用なので非公開) // currently private
-gensfen:
-	$(MAKE) CPPFLAGS='$(CPPFLAGS) $(LTOFLAGS) $(OPENMP) $(BLAS_CPPFLAGS) -DEVAL_LEARN -DGENSFEN2019' LDFLAGS='$(LDFLAGS) $(OPENMP_LDFLAGS) $(BLAS_LDFLAGS) $(LTOFLAGS)' $(TARGET)
-
-
-#　とりあえずPGOはAVX2とSSE4.2専用
-prof:
-	$(MAKE) CPPFLAGS='$(CPPFLAGS) -pg' tournament
-
-profgen:
-	$(MAKE) CPPFLAGS='$(CPPFLAGS) -fprofile-generate -lgcov' LDFLAGS='$(LDFLAGS) -fprofile-generate -lgcov'
-
-profuse:
-	$(MAKE) CPPFLAGS='$(CPPFLAGS) $(LTOFLAGS) -fprofile-use -lgcov' LDFLAGS='$(LDFLAGS) -fprofile-use -lgcov $(LTOFLAGS)'
-
-pgo:
-	$(MAKE) profgen
-	@./$(TARGET) EvalDir ../build/eval , bench , quit
-	@touch $(SOURCES)
-	$(MAKE) profuse
 
 clean:
 	rm -rf $(OBJECTS) $(DEPENDS) $(TARGET) ${OBJECTS:.o=.gcda} ${OBJDIR}
