@@ -39,6 +39,7 @@ TYPED_TEST(SaturationTest, SaturatedAdd) {
     EXPECT_EQ(SaturatedAdd<TypeParam>(kMin, kMax), kMin + kMax);
     EXPECT_EQ(SaturatedAdd<TypeParam>(kMax, kMin), kMax + kMin);
     EXPECT_EQ(SaturatedAdd<TypeParam>(kMin, -1), kMin);
+    EXPECT_EQ(SaturatedAdd<TypeParam>(kMin, 1), kMin + 1);
   }
 }
 

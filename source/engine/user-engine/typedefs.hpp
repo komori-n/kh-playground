@@ -70,74 +70,55 @@ thread_local inline std::uint32_t tl_thread_id = 0;
 thread_local inline bool tl_gc_thread = false;
 
 /**
- * @brief `T` 型の値を足し合わせる。ただし、計算結果が `T` 型で表現できない場合は上限値で丸める（符号なし型）
- * @tparam T  足し合わせる型（符号なし型）
- * @param lhs `T` 型の値
- * @param rhs `T` 型の値
- * @return `lhs` と `rhs` を足し合わせた値
+ * @brief `T` 型の値を足し合わせ、計算結果を `T` 型の範囲に丸める
+ * @tparam T  整数型
+ * @param lhs 左辺の値
+ * @param rhs 右辺の値
+ * @return `lhs + rhs` を `T` 型の範囲に丸めた値
  */
-template <typename T, Constraints<std::enable_if_t<std::is_unsigned_v<T>>> = nullptr>
+template <typename T>
 constexpr inline T SaturatedAdd(T lhs, T rhs) noexcept {
-  constexpr T kMax = std::numeric_limits<T>::max();
-  if (kMax - lhs < rhs) {
-    return kMax;
+  static_assert(std::is_integral_v<T>);
+
+#if defined(__has_builtin) && __has_builtin(__builtin_add_overflow)
+  T result{};
+  const bool overflow = __builtin_add_overflow(lhs, rhs, &result);
+  if (overflow) {
+    return lhs > 0 ? std::numeric_limits<T>::max() : std::numeric_limits<T>::min();
+  } else {
+    return result;
   }
+#else
+  if (lhs > 0 && rhs > std::numeric_limits<T>::max() - lhs) {
+    return std::numeric_limits<T>::max();
+  } else if (lhs < 0 && rhs < std::numeric_limits<T>::min() - lhs) {
+    return std::numeric_limits<T>::min();
+  }
+
   return lhs + rhs;
+#endif
 }
 
 /**
- * @brief `T` 型の値を足し合わせる。ただし、計算結果が `T` 型で表現できない場合は上限値 or 下限値で丸める（符号つき型）
- * @tparam T  足し合わせる型（符号つき型）
- * @param lhs `T` 型の値
- * @param rhs `T` 型の値
- * @return `lhs` と `rhs` を足し合わせた値
+ * @brief `T` 型の値を掛け合わせ、計算結果を `T` 型の範囲に丸める
+ * @tparam T  整数型
+ * @param lhs 左辺の値
+ * @param rhs 右辺の値
+ * @return `lhs * rhs` を `T` 型の範囲に丸めた値
  */
-template <typename T, Constraints<std::enable_if_t<std::is_signed_v<T>>> = nullptr>
-constexpr inline T SaturatedAdd(T lhs, T rhs) noexcept {
-  constexpr T kMax = std::numeric_limits<T>::max();
-  constexpr T kMin = std::numeric_limits<T>::min();
-
-  if (lhs > 0 && rhs > 0) {
-    if (kMax - lhs < rhs) {
-      return kMax;
-    }
-  } else if (lhs < 0 && rhs < 0) {
-    if (kMin - lhs > rhs) {
-      return kMin;
-    }
-  }
-  return lhs + rhs;
-}
-
-/**
- * @brief `T` 型の値を掛け合わせる。ただし、計算結果が `T` 型で表現できない場合は上限値で丸める（符号なし型）
- * @tparam T  掛け合わせる型（符号なし型）
- * @param lhs `T` 型の値
- * @param rhs `T` 型の値
- * @return `lhs` と `rhs` を掛け合わせた値
- */
-template <typename T, Constraints<std::enable_if_t<std::is_unsigned_v<T>>> = nullptr>
+template <typename T>
 constexpr inline T SaturatedMultiply(T lhs, T rhs) noexcept {
-  constexpr T kMax = std::numeric_limits<T>::max();
+  static_assert(std::is_integral_v<T>);
 
-  if (lhs == 0) {
-    return 0;
-  } else if (kMax / lhs < rhs) {
-    return kMax;
+#if defined(__has_builtin) && __has_builtin(__builtin_mul_overflow)
+  T result{};
+  const bool overflow = __builtin_mul_overflow(lhs, rhs, &result);
+  if (overflow) {
+    return ((lhs > 0) ^ (rhs > 0)) ? std::numeric_limits<T>::min() : std::numeric_limits<T>::max();
+  } else {
+    return result;
   }
-
-  return lhs * rhs;
-}
-
-/**
- * @brief `T` 型の値を掛け合わせる。ただし、計算結果が `T` 型で表現できない場合は上限値 or 下限値で丸める（符号つき型）
- * @tparam T  掛け合わせる型（符号つき型）
- * @param lhs `T` 型の値
- * @param rhs `T` 型の値
- * @return `lhs` と `rhs` を掛け合わせた値
- */
-template <typename T, Constraints<std::enable_if_t<std::is_signed_v<T>>> = nullptr>
-constexpr inline T SaturatedMultiply(T lhs, T rhs) noexcept {
+#else
   constexpr T kMax = std::numeric_limits<T>::max();
   constexpr T kMin = std::numeric_limits<T>::min();
 
@@ -165,6 +146,7 @@ constexpr inline T SaturatedMultiply(T lhs, T rhs) noexcept {
   }
 
   return lhs * rhs;
+#endif
 }
 
 /// 1局面の最大王手/王手回避の着手数
