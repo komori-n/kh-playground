@@ -96,7 +96,6 @@ void MainThread::search() {
   g_searcher.NewSearch(rootPos, is_root_or_node);
   Threads.start_searching();
   Thread::search();
-  Threads.stop = true;
   Threads.wait_for_search_finished();
 
   Move best_move = MOVE_NONE;
@@ -133,6 +132,7 @@ void MainThread::search() {
 void Thread::search() {
   komori::InitializeThread(id(), Threads.size());
   const auto result = g_searcher.Search(rootPos, IsPosOrNode(rootPos));
+  g_searcher.Stop();
   if (id() == 0) {
     g_search_result = result;
   }

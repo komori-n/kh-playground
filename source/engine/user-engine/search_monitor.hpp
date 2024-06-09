@@ -67,6 +67,8 @@ class SearchMonitor {
     stop_.store(false, std::memory_order_release);
   }
 
+  void Stop() { stop_.store(true, std::memory_order_release); }
+
   /**
    * @brief 深さ `depth` の局面に訪れたことを報告する
    * @param depth 深さ
@@ -130,12 +132,9 @@ class SearchMonitor {
   /// 今すぐ探索をやめるべきなら true
   bool ShouldStop() {
     const auto stop = stop_.load(std::memory_order_acquire);
-    if (tl_thread_id != 0) {
-      return stop || Threads.stop;
-    } else if (stop) {
-      // tick 状態に関係なく stop_ なら終了。
+    if (stop) {
       return true;
-    } else if (!stop_check_.Tick()) {
+    } else if (tl_thread_id != 0 || !stop_check_.Tick()) {
       return false;
     }
 

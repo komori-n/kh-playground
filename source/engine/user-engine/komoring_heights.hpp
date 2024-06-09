@@ -43,6 +43,9 @@ class KomoringHeights {
   /// 置換表の内容をすべて削除する。ベンチマーク用。
   void Clear();
 
+  /// 探索を停止する
+  void Stop();
+
   /**
    * @brief 詰み手順を取得する
    * @pre Search() の戻り値が `NodeState::kProven`

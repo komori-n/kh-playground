@@ -140,6 +140,10 @@ void KomoringHeights::Clear() {
   tt_.Clear();
 }
 
+void KomoringHeights::Stop() {
+  monitor_.Stop();
+}
+
 void KomoringHeights::NewSearch(const Position& n, bool is_root_or_node) {
   auto& nn = const_cast<Position&>(n);
   const Node node{nn, is_root_or_node};
@@ -186,14 +190,10 @@ std::pair<NodeState, MateLen> KomoringHeights::SearchMainLoop(Node& n) {
   NodeState node_state = NodeState::kUnknown;
   auto len{kDepthMaxMateLen};
 
-  for (Depth i = 0; i < kDepthMax; ++i) {
+  for (Depth i = 0; i < kDepthMax && !monitor_.ShouldStop(); ++i) {
     const auto result = SearchEntry(n, len);
     const auto old_score = score_;
     const auto score = Score::Make(option_.score_method, result, n.IsRootOrNode());
-
-    if (monitor_.ShouldStop()) {
-      break;
-    }
 
     if (tl_thread_id == 0) {
       score_ = score;
@@ -292,6 +292,8 @@ SearchResult KomoringHeights::SearchEntry(Node& n, MateLen len) {
 
   auto query = tt_.BuildQuery(n);
   query.SetResult(result);
+  bool tmp = false;
+  result = query.LookUp(tmp, len, [&n]() { return std::make_pair(kPnDnUnit, kPnDnUnit); });
   expansion_list_[tl_thread_id].Pop();
 
   return result;
