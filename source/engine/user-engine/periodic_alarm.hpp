@@ -76,7 +76,7 @@ class PeriodicAlarm {
 
   /// Time Point をミリ秒で取得する
   std::uint64_t Now() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
         .count();
   }
 
