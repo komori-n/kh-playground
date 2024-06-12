@@ -26,17 +26,15 @@ constexpr inline SearchAmount kFinalAmountBonus{1000};
  * 実行速度を高めるために可読性や保守性を犠牲にして1クラスに機能を詰め込んでいる。置換表の Look Up は詰将棋探索において
  * 最もよく使う機能であるため、泥臭く高速化することで全体の性能向上につながる。
  *
- * また、実行速度向上と置換表サイズの節約のために 64 バイトに収まるようにデータを詰め込む。
- *
  * ## 実装詳細
  *
  * 他のクラスよりも可読性を犠牲にしているため、普段よりも仕様を詳細に記す。
  *
- * `Entry` は以下のように 64 bytes で構成されている。キャッシュで悪さをさせないように、64 バイトにアラインさせる。
+ * `Entry` は以下のように 40 bytes で構成されている。
  *
  * ```
  *                       1      2      3      4      5      6      7      8
- * alignas(64)->      +------+------+------+------+------+------+------+------+
+ *                    +------+------+------+------+------+------+------+------+
  *                  0 |           hand_           |          amount_          |
  *                    +------+------+------+------+------+------+------+------+
  *                  8 |                      board_key_                       |
@@ -135,11 +133,6 @@ constexpr inline SearchAmount kFinalAmountBonus{1000};
  *
  * また、詰み／不詰局面は他の局面よりも大事なのでなるべく消されづらくしたい。そのため、探索量に
  * 定数（kFinalAmountBonus）を足して実際の探索量よりも大きくなるようにしている。
- *
- * ### SumMask
- *
- * 詰将棋探索では、pn/dn の二重カウントによる発散を防ぐために、δ値の和を取るべき箇所を max で代用したい場面がある。
- * SumMask は、現局面の子ノードのうちδ値を和で計算すべき子の集合を表す。この値は UpdateExact() で更新される。
  */
 class Entry {
  public:
@@ -148,7 +141,7 @@ class Entry {
   /**
    * @brief Copy constructor
    *
-   * Atomic 変数と mutex はコピー負荷なので、明示的にコピーコンストラクタを定義する。
+   * Atomic 変数と mutex はコピー不可なので、明示的にコピーコンストラクタを定義する。
    */
   Entry(const Entry& entry) noexcept
       : hand_{entry.hand_.load(std::memory_order_relaxed)},
@@ -163,7 +156,7 @@ class Entry {
   /**
    * @brief Copy assign operator
    *
-   * コンパクションで使用する。Atomic 変数と mutex はコピー負荷なので、明示的にコピーコンストラクタを定義する。
+   * コンパクションで使用する。Atomic 変数と mutex はコピー不可なので、明示的にコピーコンストラクタを定義する。
    */
   Entry& operator=(const Entry& entry) noexcept {
     hand_.store(entry.hand_.load(std::memory_order_relaxed), std::memory_order_relaxed);
