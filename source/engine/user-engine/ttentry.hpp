@@ -43,15 +43,9 @@ constexpr inline SearchAmount kFinalAmountBonus{1000};
  *                    +------+------+------+------+------+------+------+------+
  *                 16 |        proven_len_        |       disproven_len_      |
  *                    +------+------+------+------+------+------+------+------+
- *                 24 |                          pn_                          |
+ *                 24 |            pn_            |            dn_            |
  *                    +------+------+------+------+------+------+------+------+
- *                 32 |                          dn_                          |
- *                    +------+------+------+------+------+------+------+------+
- *                 40 | lock | rep  | min_depth_  |        parent_hand_       |
- *                    +------+------+------+------+------+------+------+------+
- *                 48 |                  parent_board_key_                    |
- *                    +------+------+------+------+------+------+------+------+
- *                 56 |                       sum_mask_                       |
+ *                 32 | lock | rep  | min_depth_  |        XXXXXXXXXXX        |
  *                    +------+------+------+------+------+------+------+------+
  * ```
  *
@@ -147,7 +141,7 @@ constexpr inline SearchAmount kFinalAmountBonus{1000};
  * 詰将棋探索では、pn/dn の二重カウントによる発散を防ぐために、δ値の和を取るべき箇所を max で代用したい場面がある。
  * SumMask は、現局面の子ノードのうちδ値を和で計算すべき子の集合を表す。この値は UpdateExact() で更新される。
  */
-class alignas(64) Entry {
+class Entry {
  public:
   /// Default constructor(default)
   Entry() noexcept = default;
@@ -533,7 +527,6 @@ class alignas(64) Entry {
 
 static_assert(sizeof(SearchAmount) == 4, "The size of SearchAmount must be 4.");
 static_assert(sizeof(Entry) <= 64, "The size of `Entry` must be less than or equal to 64 bytes.");
-static_assert(alignof(Entry) == 64, "`Entry` must be aligned as 64 bytes.");
 static_assert(std::is_default_constructible<Entry>(), "`Entry` must be default constructible");
 }  // namespace komori::tt
 

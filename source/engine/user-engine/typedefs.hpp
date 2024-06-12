@@ -203,7 +203,7 @@ enum class NodeState {
  *
  * 32ビット整数だとすぐにオーバーフローしてしまうので、64ビット整数を用いる。
  */
-using PnDn = std::uint64_t;
+using PnDn = std::uint32_t;
 /// pn/dn の最大値。オーバーフローを避けるために、max() より少し小さな値を設定する。
 inline constexpr PnDn kInfinitePnDn = std::numeric_limits<PnDn>::max() / 2 - 1;
 /// pn/dn 値の単位。df-pn+ では「評価値0.5」のような小数を扱いたいので1より大きな値を用いれるようにする。

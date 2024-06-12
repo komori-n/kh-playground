@@ -424,7 +424,6 @@ class LocalExpansion {
 
   /**
    * @brief
-   *
    */
   constexpr void RecalcDelta() {
     delta_max_ = 0;

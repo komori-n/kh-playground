@@ -17,7 +17,7 @@ using testing::Return;
 namespace {
 
 struct RegularTableMock {
-  static constexpr std::size_t kSizePerEntry = 64;
+  static constexpr std::size_t kSizePerEntry = 40;
 
   MOCK_METHOD(void, Resize, (std::uint64_t));
   MOCK_METHOD(void, Clear, ());
@@ -69,7 +69,7 @@ TEST_F(TranspositionTableTest, Resize) {
   EXPECT_CALL(tt_.GetRepetitionTable(), Resize).WillOnce([&](std::uint64_t b) { m = b; });
   tt_.Resize(usi_hash_mb);
 
-  EXPECT_FLOAT_EQ((1 - kRegularRepetitionRatio) * n * sizeof(komori::tt::Entry), kRegularRepetitionRatio * m * 16);
+  EXPECT_FLOAT_EQ((1 - kRegularRepetitionRatio) * n * 40, kRegularRepetitionRatio * m * 16);
 }
 
 TEST_F(TranspositionTableTest, NewSearch) {

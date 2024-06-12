@@ -52,7 +52,7 @@ TEST_F(QueryTest, LoopUp_None) {
 }
 
 TEST_F(QueryTest, LoopUp_UnknownExact) {
-  for (std::size_t i = 0; i < 15; ++i) {
+  for (std::uint32_t i = 0; i < 15; ++i) {
     const PnDn pn{33 * (i + 1)};
     const PnDn dn{4 * (i + 1)};
     const SearchAmount amount{334};
@@ -254,7 +254,7 @@ TEST_F(QueryTest, SetResult_UnknownNew) {
 }
 
 TEST_F(QueryTest, SetResult_UnknownUpdate) {
-  for (std::size_t i = 0; i < 15; ++i) {
+  for (std::uint32_t i = 0; i < 15; ++i) {
     const PnDn pn{33 * (i + 1)};
     const PnDn dn{4 * (i + 1)};
     const SearchAmount amount{static_cast<SearchAmount>(334 * (i + 1))};
