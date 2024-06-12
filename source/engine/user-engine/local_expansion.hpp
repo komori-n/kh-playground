@@ -11,7 +11,6 @@
 #include "bitset.hpp"
 #include "board_key_hand_pair.hpp"
 #include "delayed_move_list.hpp"
-#include "double_count_elimination.hpp"
 #include "fixed_size_stack.hpp"
 #include "hands.hpp"
 #include "initial_estimation.hpp"
@@ -384,45 +383,6 @@ class LocalExpansion {
     } else {
       return {child_thdelta, child_thphi};
     }
-  }
-
-  /**
-   * @brief 二重カウントの起点 `edge` に一致する枝が子に含まれるなら二重カウントを解消する
-   * @param edge 二重カウントの起点の枝
-   * @return `edge` を見つけたら true
-   */
-  bool ResolveDoubleCountIfBranchRoot(BranchRootEdge edge) {
-    if (edge.branch_root_key_hand_pair == key_hand_pair_) {
-      sum_mask_.Reset(idx_.front());
-      for (const auto i_raw : Skip(idx_, excluded_moves_ + 1)) {
-        const auto& query = queries_[i_raw];
-        const auto& child_key_hand_pair = query.GetBoardKeyHandPair();
-        if (child_key_hand_pair == edge.child_key_hand_pair) {
-          if (sum_mask_.Test(i_raw)) {
-            sum_mask_.Reset(i_raw);
-            RecalcDelta();
-          }
-          break;
-        }
-      }
-      return true;
-    }
-
-    return false;
-  }
-
-  /**
-   * @brief 二重カウント探索をやめるべきかどうか判定する
-   * @param branch_root_is_or_node 二重カウントの分岐元が OR node かどうか
-   */
-  bool ShouldStopAncestorSearch(bool branch_root_is_or_node) const {
-    if (or_node_ != branch_root_is_or_node) {
-      return false;
-    }
-
-    const auto& best_result = FrontResult();
-    const PnDn delta_diff = GetDelta() - best_result.Delta(or_node_);
-    return delta_diff > kAncestorSearchThreshold;
   }
 
  private:

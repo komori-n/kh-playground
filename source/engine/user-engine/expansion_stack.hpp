@@ -62,32 +62,6 @@ class ExpansionStack {
    */
   const LocalExpansion& Root() const { return list_.front(); }
 
-  /**
-   * @brief 現局面が終点となるの二重カウント解消を試みる
-   * @param tt 置換表
-   * @param n  現局面
-   */
-  void EliminateDoubleCount(tt::TranspositionTable& tt, const Node& n) {
-    const auto& current = Current();
-    if (current.empty()) {
-      return;
-    }
-
-    const auto best_move = current.BestMove();
-    if (const auto opt = FindKnownAncestor(tt, n, best_move)) {
-      const auto branch_root_edge = *opt;
-      for (auto itr = list_.rbegin() + 1; itr != list_.rend(); ++itr) {
-        if (itr->ResolveDoubleCountIfBranchRoot(branch_root_edge)) {
-          break;
-        }
-
-        if (itr->ShouldStopAncestorSearch(branch_root_edge.branch_root_is_or_node)) {
-          break;
-        }
-      }
-    }
-  }
-
  private:
   /**
    * @brief 格納データの本体。
