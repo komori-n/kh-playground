@@ -78,16 +78,6 @@ TEST_F(LocalExpansionTest, NoLegalMoves) {
   EXPECT_EQ(res.Dn(), 0);
 }
 
-TEST_F(LocalExpansionTest, DelayExpansion) {
-  TestNode n{"6R1k/7lp/9/9/9/9/9/9/9 w r2b4g4s4n3l17p 1", false};
-  LocalExpansion local_expansion{tt_, *n, MateLen{334}, true};
-
-  const auto [pn, dn] = komori::InitialPnDn(*n, make_move_drop(ROOK, SQ_21, BLACK));
-  const auto res = local_expansion.CurrentResult(*n);
-  EXPECT_EQ(res.Pn(), pn + 1);
-  EXPECT_EQ(res.Dn(), dn);
-}
-
 TEST_F(LocalExpansionTest, ObviousRepetition) {
   TestNode n{"7lk/7p1/9/8L/8p/9/9/9/9 w 2r2b4g4s4n2l16p 1", false};
   n->DoMove(make_move_drop(LANCE, SQ_13, WHITE));
@@ -120,15 +110,4 @@ TEST_F(LocalExpansionTest, InitialSort) {
   const auto res = local_expansion.CurrentResult(*n);
   EXPECT_EQ(res.Pn(), pn);
   EXPECT_EQ(res.Dn(), dn);
-}
-
-TEST_F(LocalExpansionTest, MaxChildren) {
-  TestNode n{"6pkp/7PR/7L1/9/9/9/9/9/9 w r2b4g4s4n3l15p 1", false};
-  LocalExpansion local_expansion{tt_, *n, MateLen{334}, true, komori::BitSet64{}};
-
-  const auto [pn1, dn1] = komori::InitialPnDn(*n, make_move(SQ_21, SQ_12, W_KING));
-  const auto [pn2, dn2] = komori::InitialPnDn(*n, make_move(SQ_21, SQ_32, W_KING));
-  const auto res = local_expansion.CurrentResult(*n);
-  EXPECT_EQ(res.Pn(), std::max(pn1, pn2));
-  EXPECT_EQ(res.Dn(), std::min(dn1, dn2));
 }

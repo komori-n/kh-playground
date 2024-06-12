@@ -19,6 +19,7 @@
 #include "node.hpp"
 #include "ranges.hpp"
 #include "transposition_table.hpp"
+#include "typedefs.hpp"
 
 namespace komori {
 namespace detail {
@@ -295,11 +296,17 @@ class LocalExpansion {
     const auto old_i_raw = idx_[excluded_moves_];
     const auto& query = queries_[old_i_raw];
     auto& result = results_[old_i_raw];
+    const PnDn orig_delta = result.Delta(or_node_);
+    const PnDn new_delta = search_result.Delta(or_node_);
 
     result = search_result;
     query.SetResult(search_result, key_hand_pair_);
     if (!result.IsFinal() && result.Delta(or_node_) >= detail::kForceSumPnDn) {
       sum_mask_.Reset(old_i_raw);
+    }
+
+    if (result.IsFinal()) {
+      valid_child_num_--;
     }
 
     if (search_result.Phi(or_node_) == 0) {
@@ -339,27 +346,18 @@ class LocalExpansion {
 
       RecalcDelta();
     } else {
-      if (search_result.Phi(or_node_) > 0) {
-        // 現在探索していた手が delta_except_best_ に加わるので差分計算する
-        const bool old_is_sum_delta = sum_mask_[old_i_raw];
-        if (old_is_sum_delta) {
-          sum_delta_except_best_ += result.Delta(or_node_);
-        } else {
-          max_delta_except_best_ = std::max(max_delta_except_best_, result.Delta(or_node_));
+      bool needs_recalc_delta = false;
+      if (new_delta != kInfinitePnDn) {
+        if (delta_max_ < new_delta) {
+          delta_max_ = new_delta;
+        } else if (orig_delta == delta_max_ && new_delta < delta_max_) {
+          // max_delta_except_best_ が更新される可能性がある
+          needs_recalc_delta = true;
         }
-
-        ResortFront();
       }
+      ResortFront();
 
-      const auto new_i_raw = idx_[excluded_moves_];
-      const auto new_result = results_[new_i_raw];
-      const bool new_is_sum_delta = sum_mask_[new_i_raw];
-      if (new_is_sum_delta) {
-        sum_delta_except_best_ -= new_result.Delta(or_node_);
-      } else if (new_result.Delta(or_node_) < max_delta_except_best_) {
-        // new_best_child を抜いても max_delta_except_best_ の値は変わらない
-      } else {
-        // max_delta_ の再計算が必要
+      if (needs_recalc_delta) {
         RecalcDelta();
       }
     }
@@ -466,33 +464,13 @@ class LocalExpansion {
   PnDn GetDelta() const {
     if (idx_.empty()) {
       return 0;
-    }
-
-    const auto& best_result = FrontResult();
-    // 差分計算用の値を予め持っているので、高速に計算できる
-    auto sum_delta = sum_delta_except_best_;
-    auto max_delta = max_delta_except_best_;
-    if (sum_mask_[idx_[excluded_moves_]]) {
-      sum_delta = ClampPnDn(sum_delta + best_result.Delta(or_node_));
-    } else {
-      max_delta = std::max(max_delta, best_result.Delta(or_node_));
-    }
-
-    // 後回しにしている子局面が存在する場合、その値をδ値に加算しないと局面を過大評価してしまう。
-    //
-    // 例） sfen +P5l2/4+S4/p1p+bpp1kp/6pgP/3n1n3/P2NP4/3P1NP2/2P2S3/3K3L1 b RGSL2Prb2gsl3p 159
-    //      1筋の合駒を考える時、玉方が合駒を微妙に変えることで読みの深さを指数関数的に大きくできてしまう
-    if (mp_.size() > idx_.size()) {
-      // 後回しにしている手1つにつき 1/8 点減点する。小数点以下は切り捨てするが、計算結果が 1 を下回る場合のみ
-      // 1 に切り上げる。
-      sum_delta += std::max<std::size_t>((mp_.size() - idx_.size()) / 8, 1);
-    }
-
-    const auto raw_delta = ClampPnDn(sum_delta + max_delta);
-    if (excluded_moves_ > 0 && raw_delta == 0) {
+    } else if (GetPhi() == 0) {
       return kInfinitePnDn;
+    } else if (GetPhi() == kInfinitePnDn) {
+      return 0;
     }
-    return raw_delta;
+
+    return delta_max_ + valid_child_num_ - 1;
   }
 
   /// 2番目の子の phi 値を計算する
@@ -508,39 +486,24 @@ class LocalExpansion {
    * @brief 現局面の delta しきい値が `thdelta` のとき、子局面の delta しきい値を計算する
    * @param thdelta 現局面の delta しきい値
    */
-  PnDn NewThdeltaForBestMove(PnDn thdelta) const {
-    PnDn delta_except_best = sum_delta_except_best_;
-    if (mp_.size() > idx_.size()) {
-      delta_except_best += std::max<std::size_t>((mp_.size() - idx_.size()) / 8, 1);
-    }
-
-    if (sum_mask_[idx_[excluded_moves_]]) {
-      delta_except_best = SaturatedAdd(delta_except_best, max_delta_except_best_);
-    }
-
-    // 計算の際はオーバーフローに注意
-    if (thdelta >= delta_except_best) {
-      return ClampPnDn(thdelta - delta_except_best);
-    }
-
-    return 0;
-  }
+  PnDn NewThdeltaForBestMove(PnDn thdelta) const { return SaturatedSubtract(thdelta, valid_child_num_ - 1); }
   // </PnDn>
 
   /**
    * @brief δ値の一時変数 `sum_delta_except_best_`, `max_delta_except_best_` を計算し直す
    */
   constexpr void RecalcDelta() {
-    sum_delta_except_best_ = 0;
-    max_delta_except_best_ = 0;
-
-    for (const auto& i_raw : Skip(idx_, excluded_moves_ + 1)) {
-      const auto delta_i = results_[i_raw].Delta(or_node_);
-      if (sum_mask_[i_raw]) {
-        sum_delta_except_best_ = ClampPnDn(sum_delta_except_best_ + delta_i);
-      } else {
-        max_delta_except_best_ = std::max(max_delta_except_best_, delta_i);
+    delta_max_ = 0;
+    valid_child_num_ = 0;
+    for (const auto i_raw : Skip(idx_, excluded_moves_)) {
+      const auto& result = results_[i_raw];
+      if (result.IsFinal()) {
+        break;
       }
+
+      const auto delta = result.Delta(or_node_);
+      delta_max_ = std::max(delta_max_, delta);
+      valid_child_num_++;
     }
   }
 
@@ -699,8 +662,8 @@ class LocalExpansion {
   /// 現局面の評価値が古い探索情報に基づくものかどうか。TCA の探索延長の判断に用いる。
   bool does_have_old_child_{false};
 
-  PnDn sum_delta_except_best_;  ///< 和でδを計上する子のうち最善手・excluded_moves_ を除いたもののδ値の和
-  PnDn max_delta_except_best_;  ///< 最大値でδを計上する子のうち最善手・excluded_moves_ を除いたもののδ値の最大値
+  PnDn delta_max_{};        ///< δの最大値
+  PnDn valid_child_num_{};  ///< 有効な子（idx_ に入っていて、かつfinalでない子）の数
 
   /// δ値を和で計算すべき子の一覧。ビットが立っている子は和、立っていない子は最大値で計上する。
   BitSet64 sum_mask_;
