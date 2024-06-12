@@ -53,8 +53,8 @@ TEST_F(QueryTest, LoopUp_None) {
 
 TEST_F(QueryTest, LoopUp_UnknownExact) {
   for (std::uint32_t i = 0; i < 15; ++i) {
-    const PnDn pn{33 * (i + 1)};
-    const PnDn dn{4 * (i + 1)};
+    const PnDn pn{static_cast<PnDn>(33 * (i + 1))};
+    const PnDn dn{static_cast<PnDn>(4 * (i + 1))};
     const SearchAmount amount{334};
 
     entries_[i].Init(board_key_, hand_);
@@ -255,8 +255,8 @@ TEST_F(QueryTest, SetResult_UnknownNew) {
 
 TEST_F(QueryTest, SetResult_UnknownUpdate) {
   for (std::uint32_t i = 0; i < 15; ++i) {
-    const PnDn pn{33 * (i + 1)};
-    const PnDn dn{4 * (i + 1)};
+    const PnDn pn{static_cast<PnDn>(33 * (i + 1))};
+    const PnDn dn{static_cast<PnDn>(4 * (i + 1))};
     const SearchAmount amount{static_cast<SearchAmount>(334 * (i + 1))};
     entries_[i].Init(board_key_, hand_);
 

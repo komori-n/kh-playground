@@ -346,7 +346,7 @@ class LocalExpansion {
 
     const auto thphi = Phi(thpn, thdn, or_node_);
     const auto thdelta = Delta(thpn, thdn, or_node_);
-    const auto child_thphi = std::min(thphi, GetSecondPhi() + 1);
+    const auto child_thphi = std::min<PnDn>(thphi, GetSecondPhi() + 1);
     const auto child_thdelta = NewThdeltaForBestMove(thdelta);
 
     if (or_node_) {
@@ -418,7 +418,7 @@ class LocalExpansion {
    * @param thdelta 現局面の delta しきい値
    */
   PnDn NewThdeltaForBestMove(PnDn thdelta) const {
-    return SaturatedSubtract(thdelta, kPnDnUnit * (valid_child_num_ - 1));
+    return SaturatedSubtract<PnDn>(thdelta, kPnDnUnit * (valid_child_num_ - 1));
   }
   // </PnDn>
 
