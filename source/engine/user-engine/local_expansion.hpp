@@ -401,7 +401,7 @@ class LocalExpansion {
       return 0;
     }
 
-    return delta_max_ + valid_child_num_ - 1;
+    return delta_max_ + kPnDnUnit * (valid_child_num_ - 1);
   }
 
   /// 2番目の子の phi 値を計算する
@@ -417,11 +417,14 @@ class LocalExpansion {
    * @brief 現局面の delta しきい値が `thdelta` のとき、子局面の delta しきい値を計算する
    * @param thdelta 現局面の delta しきい値
    */
-  PnDn NewThdeltaForBestMove(PnDn thdelta) const { return SaturatedSubtract(thdelta, valid_child_num_ - 1); }
+  PnDn NewThdeltaForBestMove(PnDn thdelta) const {
+    return SaturatedSubtract(thdelta, kPnDnUnit * (valid_child_num_ - 1));
+  }
   // </PnDn>
 
   /**
-   * @brief δ値の一時変数 `sum_delta_except_best_`, `max_delta_except_best_` を計算し直す
+   * @brief
+   *
    */
   constexpr void RecalcDelta() {
     delta_max_ = 0;
