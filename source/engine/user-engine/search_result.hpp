@@ -4,7 +4,6 @@
 #ifndef KOMORI_SEARCH_RESULT_HPP_
 #define KOMORI_SEARCH_RESULT_HPP_
 
-#include "bitset.hpp"
 #include "mate_len.hpp"
 #include "typedefs.hpp"
 

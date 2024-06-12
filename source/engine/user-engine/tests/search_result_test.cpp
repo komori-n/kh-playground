@@ -3,7 +3,6 @@
 #include "../search_result.hpp"
 #include "test_lib.hpp"
 
-using komori::BitSet64;
 using komori::FinalData;
 using komori::MateLen;
 using komori::NodeState;

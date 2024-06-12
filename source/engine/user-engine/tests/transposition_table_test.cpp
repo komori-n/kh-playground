@@ -7,7 +7,6 @@
 #include "../transposition_table.hpp"
 #include "test_lib.hpp"
 
-using komori::BitSet64;
 using komori::kDepthMax;
 using komori::tt::CircularEntryPointer;
 using komori::tt::RepetitionTable;

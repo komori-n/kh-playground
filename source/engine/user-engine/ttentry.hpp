@@ -7,7 +7,6 @@
 #include <atomic>
 #include <cstdint>
 
-#include "bitset.hpp"
 #include "hands.hpp"
 #include "mate_len.hpp"
 #include "shared_exclusive_lock.hpp"
@@ -147,9 +146,6 @@ constexpr inline SearchAmount kFinalAmountBonus{1000};
  *
  * 詰将棋探索では、pn/dn の二重カウントによる発散を防ぐために、δ値の和を取るべき箇所を max で代用したい場面がある。
  * SumMask は、現局面の子ノードのうちδ値を和で計算すべき子の集合を表す。この値は UpdateExact() で更新される。
- *
- * SumMask のデフォルト値は `BitSet64::Full()` である。すなわち、初期状態はすべての子のδ値を和で計算する。
- * この値は探索部に依存する値なので、このファイル内で初期化を行っているのは本当は良くない。
  */
 class alignas(64) Entry {
  public:
