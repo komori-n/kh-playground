@@ -32,9 +32,9 @@ class CircularArray {
    *
    * `T` がデフォルト構築可能な時のみ定義する。
    */
-  template <typename U = T,
-            Constraints<std::enable_if_t<std::is_same_v<T, U> && std::is_default_constructible_v<U>>> = nullptr>
-  constexpr void Clear() noexcept(std::is_nothrow_default_constructible_v<U>) {
+  template <std::nullptr_t kNull = nullptr,
+            Constraints<std::enable_if_t<kNull == nullptr && std::is_default_constructible_v<T>>> = nullptr>
+  constexpr void Clear() noexcept(std::is_nothrow_default_constructible_v<T>) {
     for (auto& v : data_) {
       v = T{};
     }
