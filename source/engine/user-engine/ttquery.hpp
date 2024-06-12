@@ -7,7 +7,6 @@
 #include <optional>
 #include <shared_mutex>
 
-#include "board_key_hand_pair.hpp"
 #include "mate_len.hpp"
 #include "regular_table.hpp"
 #include "repetition_table.hpp"
@@ -94,9 +93,6 @@ class Query {
   constexpr Query& operator=(Query&&) noexcept = default;
   /// Destructor
   ~Query() noexcept = default;
-
-  /// 盤面ハッシュ値と持ち駒のペアを返す
-  constexpr BoardKeyHandPair GetBoardKeyHandPair() const noexcept { return BoardKeyHandPair{board_key_, hand_}; }
 
   // テンプレート関数のカバレッジは悲しいことになるので取らない
   // LCOV_EXCL_START NOLINTBEGIN

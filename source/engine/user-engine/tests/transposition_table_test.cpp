@@ -112,22 +112,6 @@ TEST_F(TranspositionTableTest, BuildChildQuery) {
   EXPECT_EQ(query.depth, test_node->GetDepth() + 1);
 }
 
-TEST_F(TranspositionTableTest, BuildQueryByKey_Normal) {
-  const Key board_key = 0x334334334334;
-  const Key path_key = 0x264264264264;
-  const auto hand = MakeHand<PAWN, LANCE, LANCE>();
-
-  EXPECT_CALL(tt_.GetRegularTable(), PointerOf).WillOnce(Return(CircularEntryPointer{nullptr, nullptr, nullptr}));
-  const auto query = tt_.BuildQueryByKey({board_key, hand}, path_key);
-
-  EXPECT_EQ(&query.rep_table, &tt_.GetRepetitionTable());
-  EXPECT_EQ(query.initial_entry_pointer.data(), nullptr);
-  EXPECT_EQ(query.path_key, path_key);
-  EXPECT_EQ(query.board_key, board_key);
-  EXPECT_EQ(query.hand, hand);
-  EXPECT_EQ(query.depth, kDepthMax);
-}
-
 TEST_F(TranspositionTableTest, Hashfull) {
   const double r1 = 0.75;
   const double r2 = 0.5;

@@ -4,7 +4,6 @@
 #ifndef KOMORI_TRANSPOSITION_TABLE_HPP_
 #define KOMORI_TRANSPOSITION_TABLE_HPP_
 
-#include "board_key_hand_pair.hpp"
 #include "node.hpp"
 #include "regular_table.hpp"
 #include "repetition_table.hpp"
@@ -128,20 +127,6 @@ class TranspositionTableImpl {
     const auto depth = n.GetDepth() + 1;
 
     auto cluster = regular_table_.PointerOf(board_key);
-    return {repetition_table_, cluster, path_key, board_key, hand, depth};
-  }
-
-  /**
-   * @brief 生のハッシュ値からクエリを構築する
-   * @param key_hand_pair 盤面ハッシュ値と持ち駒のペア
-   * @param path_key 経路ハッシュ値（default: kNullKey）
-   * @return クエリ
-   * @note 二重カウント検出用
-   */
-  Query BuildQueryByKey(BoardKeyHandPair key_hand_pair, Key path_key = kNullKey) {
-    const auto [board_key, hand] = key_hand_pair;
-    auto cluster = regular_table_.PointerOf(board_key);
-    const auto depth = kDepthMax;
     return {repetition_table_, cluster, path_key, board_key, hand, depth};
   }
 

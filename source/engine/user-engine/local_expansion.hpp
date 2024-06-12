@@ -8,7 +8,6 @@
 #include <optional>
 #include <utility>
 
-#include "board_key_hand_pair.hpp"
 #include "delayed_move_list.hpp"
 #include "fixed_size_stack.hpp"
 #include "hands.hpp"
