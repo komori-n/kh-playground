@@ -368,11 +368,10 @@ class LocalExpansion {
 
   /// delta 値を計算する
   PnDn GetDelta() const {
-    if (idx_.empty()) {
-      return 0;
-    } else if (GetPhi() == 0) {
+    const PnDn phi = GetPhi();
+    if (phi == 0) {
       return kInfinitePnDn;
-    } else if (GetPhi() == kInfinitePnDn) {
+    } else if (phi == kInfinitePnDn) {
       return 0;
     }
 
@@ -569,7 +568,7 @@ class LocalExpansion {
   /// 現局面の評価値が古い探索情報に基づくものかどうか。TCA の探索延長の判断に用いる。
   bool does_have_old_child_{false};
 
-  PnDn delta_max_{};        ///< δの最大値
+  PnDn delta_max_{};        ///< δ == kInfinitePnDn でない子の中で最大の δ 値
   PnDn valid_child_num_{};  ///< 有効な子（idx_ に入っていて、かつfinalでない子）の数
 
   /// 現在有効な生添字の一覧。「良さ順」で並んでいる。

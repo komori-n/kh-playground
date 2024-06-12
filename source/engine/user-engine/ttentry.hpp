@@ -7,7 +7,6 @@
 #include <atomic>
 #include <cstdint>
 
-#include "hands.hpp"
 #include "mate_len.hpp"
 #include "shared_exclusive_lock.hpp"
 #include "typedefs.hpp"
@@ -41,9 +40,7 @@ constexpr inline SearchAmount kFinalAmountBonus{1000};
  *                    +------+------+------+------+------+------+------+------+
  *                 16 |        proven_len_        |       disproven_len_      |
  *                    +------+------+------+------+------+------+------+------+
- *                 24 |            pn_            |            dn_            |
- *                    +------+------+------+------+------+------+------+------+
- *                 32 | lock | rep  | min_depth_  |        XXXXXXXXXXX        |
+ *                 24 |     pn_     |     dn_     | lock | rep  | min_depth_  |
  *                    +------+------+------+------+------+------+------+------+
  * ```
  *
@@ -134,7 +131,7 @@ constexpr inline SearchAmount kFinalAmountBonus{1000};
  * また、詰み／不詰局面は他の局面よりも大事なのでなるべく消されづらくしたい。そのため、探索量に
  * 定数（kFinalAmountBonus）を足して実際の探索量よりも大きくなるようにしている。
  */
-class Entry {
+class alignas(32) Entry {
  public:
   /// Default constructor(default)
   Entry() noexcept = default;

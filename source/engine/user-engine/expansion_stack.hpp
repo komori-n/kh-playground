@@ -34,8 +34,6 @@ class ExpansionStack {
    * @tparam Args `LocalExpansion` のコンストラクタの引数。詳細は `LocalExpansion` の定義を参照。
    * @param args `LocalExpansion` のコンストラクタの引数。
    * @return 構築した `LocalExpansion` オブジェクト
-   *
-   * 構築した `LocalExpansion` において局面の合流を検出した場合、二重カウントの回避を試みる。
    */
   template <typename... Args>
   LocalExpansion& Emplace(Args&&... args) {
