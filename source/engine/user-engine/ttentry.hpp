@@ -165,9 +165,7 @@ class alignas(64) Entry {
         pn_{entry.pn_},
         dn_{entry.dn_},
         repetition_state_{entry.repetition_state_},
-        min_depth_{entry.min_depth_.load(std::memory_order_relaxed)},
-        parent_hand_{entry.parent_hand_},
-        parent_board_key_{entry.parent_board_key_} {}
+        min_depth_{entry.min_depth_.load(std::memory_order_relaxed)} {}
   /**
    * @brief Copy assign operator
    *
@@ -183,8 +181,6 @@ class alignas(64) Entry {
     dn_ = entry.dn_;
     repetition_state_ = entry.repetition_state_;
     min_depth_.store(entry.min_depth_.load(std::memory_order_relaxed), std::memory_order_relaxed);
-    parent_hand_ = entry.parent_hand_;
-    parent_board_key_ = entry.parent_board_key_;
 
     return *this;
   }
@@ -207,9 +203,6 @@ class alignas(64) Entry {
     dn_ = 1;
     repetition_state_ = RepetitionState::kNone;
     min_depth_.store(static_cast<std::int16_t>(kDepthMax), std::memory_order_relaxed);
-
-    parent_hand_ = kNullHand;
-    parent_board_key_ = kNullKey;
   }
 
   /// エントリの排他ロックを取る
@@ -257,10 +250,6 @@ class alignas(64) Entry {
   SearchAmount Amount() const noexcept { return amount_; }
   /// 現局面の持ち駒
   Hand GetHand() const noexcept { return hand_.load(std::memory_order_relaxed); }
-  /// 親局面の盤面ハッシュ値
-  Key GetParentBoardKey() const noexcept { return parent_board_key_; }
-  /// 親局面の持ち駒
-  Hand GetParentHand() const noexcept { return parent_hand_; }
   /// 盤面ハッシュ値（コンパクション用）
   Key BoardKey() const noexcept { return board_key_; }
 
@@ -289,22 +278,13 @@ class alignas(64) Entry {
    * @param pn     pn
    * @param dn     dn
    * @param amount 探索量
-   * @param parent_board_key 親局面の盤面ハッシュ値
-   * @param parent_hand 親局面の攻め方の持ち駒
    * @pre `IsFor(board_key, hand)` （`board_key`, `hand` は現局面の盤面ハッシュ、持ち駒）
    */
-  void UpdateUnknown(Depth depth,
-                     PnDn pn,
-                     PnDn dn,
-                     SearchAmount amount,
-                     Key parent_board_key,
-                     Hand parent_hand) noexcept {
+  void UpdateUnknown(Depth depth, PnDn pn, PnDn dn, SearchAmount amount) noexcept {
     const auto depth16 = static_cast<std::int16_t>(depth);
     min_depth_.store(std::min(min_depth_.load(std::memory_order_relaxed), depth16), std::memory_order_relaxed);
     pn_ = pn;
     dn_ = dn;
-    parent_board_key_ = parent_board_key;
-    parent_hand_ = parent_hand;
     amount_ = std::max(amount_, amount);
   }
 
@@ -387,36 +367,6 @@ class alignas(64) Entry {
 
     // 優等でも劣等でもない局面。何もせずに返る
     return false;
-  }
-
-  /**
-   * @brief `hand` に対応する親局面を取得する
-   * @param hand 現局面の持ち駒
-   * @param pn pn
-   * @param dn dn
-   * @param parent_board_key 親局面の盤面ハッシュ値
-   * @param parent_hand 親局面の持ち駒
-   */
-  void UpdateParentCandidate(Hand hand, PnDn& pn, PnDn& dn, Key& parent_board_key, Hand& parent_hand) const {
-    const Hand entry_hand = hand_.load(std::memory_order_relaxed);
-    const bool is_inferior = hand_is_equal_or_superior(entry_hand, hand);
-    const bool is_superior = hand_is_equal_or_superior(hand, entry_hand);
-
-    if (is_inferior && pn_ > pn) {
-      pn = pn_;
-      if (parent_hand_ != kNullHand && (parent_hand == kNullHand || pn > dn)) {
-        parent_board_key = parent_board_key_;
-        parent_hand = ApplyDeltaHand(parent_hand_, entry_hand, hand);
-      }
-    }
-
-    if (is_superior && dn_ > dn) {
-      dn = dn_;
-      if (parent_hand_ != kNullHand && (parent_hand == kNullHand || dn > pn)) {
-        parent_board_key = parent_board_key_;
-        parent_hand = ApplyDeltaHand(parent_hand_, entry_hand, hand);
-      }
-    }
   }
 
   /**
@@ -579,9 +529,6 @@ class alignas(64) Entry {
   RepetitionState repetition_state_;               ///< 現局面が千日手の可能性があるか
   /// 最小探索深さ。`LookUp()` 中に書き換える可能性があるので atomic かつ mutable。
   mutable std::atomic<std::int16_t> min_depth_;
-
-  Hand parent_hand_;      ///< 親局面の持ち駒
-  Key parent_board_key_;  ///< 親局面の盤面ハッシュ値
 };
 
 static_assert(sizeof(SearchAmount) == 4, "The size of SearchAmount must be 4.");

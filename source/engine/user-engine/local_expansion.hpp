@@ -134,12 +134,7 @@ class LocalExpansion {
    * @param multi_pv 勝ちになる手をいくつ見つけるか。1以上でなければならない
    */ // NOLINTNEXTLINE(readability-function-cognitive-complexity)
   LocalExpansion(tt::TranspositionTable& tt, const Node& n, MateLen len, bool first_search, std::uint32_t multi_pv = 1)
-      : or_node_{n.IsOrNode()},
-        mp_{n, true},
-        delayed_move_list_{n, mp_},
-        len_{len},
-        key_hand_pair_{n.GetBoardKeyHandPair()},
-        multi_pv_{multi_pv} {
+      : or_node_{n.IsOrNode()}, mp_{n, true}, delayed_move_list_{n, mp_}, len_{len}, multi_pv_{multi_pv} {
     // 1手詰め／1手不詰判定のために、const を一時的に外す
     Node& nn = const_cast<Node&>(n);
 
@@ -279,7 +274,7 @@ class LocalExpansion {
     const PnDn new_delta = search_result.Delta(or_node_);
 
     result = search_result;
-    query.SetResult(search_result, key_hand_pair_);
+    query.SetResult(search_result);
 
     if (result.IsFinal()) {
       valid_child_num_--;
@@ -588,8 +583,7 @@ class LocalExpansion {
   const MovePicker mp_;                      ///< 現局面の合法手
   const DelayedMoveList delayed_move_list_;  ///< 後回しにしている手のグラフ構造
   const MateLen len_;                        ///< 現局面における残り探索手数
-  const BoardKeyHandPair key_hand_pair_;  ///< 現局面の盤面ハッシュ値と持ち駒。二重カウント対策で用いる。
-  const std::uint32_t multi_pv_;  ///< MultiPv の値。1以上でなければならない
+  const std::uint32_t multi_pv_;             ///< MultiPv の値。1以上でなければならない
 
   /// 子の現在の評価値結果一覧
   std::array<SearchResult, kMaxCheckMovesPerNode> results_;

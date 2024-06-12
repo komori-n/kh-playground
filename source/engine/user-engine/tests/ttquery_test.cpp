@@ -62,7 +62,7 @@ TEST_F(QueryTest, LoopUp_UnknownExact) {
     const SearchAmount amount{334};
 
     entries_[i].Init(board_key_, hand_);
-    entries_[i].UpdateUnknown(depth_, pn, dn, amount, 0, HAND_ZERO);
+    entries_[i].UpdateUnknown(depth_, pn, dn, amount);
 
     bool does_have_old_child{false};
     const auto result = query_.LookUp(does_have_old_child, MateLen{334}, kDefaultInitialEvalFunc);
@@ -83,7 +83,7 @@ TEST_F(QueryTest, LoopUp_UnknownExactRepetition) {
 
   entries_[0].Init(board_key_, hand_);
   entries_[0].SetPossibleRepetition();
-  entries_[0].UpdateUnknown(depth_, pn, dn, 1, 0, HAND_ZERO);
+  entries_[0].UpdateUnknown(depth_, pn, dn, 1);
 
   bool does_have_old_child{false};
   const auto result = query_.LookUp(does_have_old_child, MateLen{334}, kDefaultInitialEvalFunc);
@@ -101,9 +101,9 @@ TEST_F(QueryTest, LoopUp_UnknownExactNoRepetition) {
   const SearchAmount amount{334};
 
   entries_[0].Init(board_key_, hand_);
-  entries_[0].UpdateUnknown(depth_, pn, dn, amount, 0, HAND_ZERO);
+  entries_[0].UpdateUnknown(depth_, pn, dn, amount);
   entries_[0].SetPossibleRepetition();
-  entries_[0].UpdateUnknown(board_key_, pn, dn, 1, 0, HAND_ZERO);
+  entries_[0].UpdateUnknown(board_key_, pn, dn, 1);
 
   bool does_have_old_child{false};
   const auto result = query_.LookUp(does_have_old_child, MateLen{334}, kDefaultInitialEvalFunc);
@@ -119,7 +119,7 @@ TEST_F(QueryTest, LoopUp_DifferentBoardKey) {
   const SearchAmount amount{334};
 
   entries_[0].Init(board_key_ ^ 0x01, hand_);
-  entries_[0].UpdateUnknown(depth_, pn, dn, amount, 0, HAND_ZERO);
+  entries_[0].UpdateUnknown(depth_, pn, dn, amount);
 
   bool does_have_old_child{false};
   const auto result = query_.LookUp(does_have_old_child, MateLen{334}, kDefaultInitialEvalFunc);
@@ -135,7 +135,7 @@ TEST_F(QueryTest, LoopUp_DifferentHand) {
   const SearchAmount amount{334};
 
   entries_[0].Init(board_key_, MakeHand<GOLD>());
-  entries_[0].UpdateUnknown(depth_, pn, dn, amount, 0, HAND_ZERO);
+  entries_[0].UpdateUnknown(depth_, pn, dn, amount);
 
   bool does_have_old_child{false};
   const auto result = query_.LookUp(does_have_old_child, MateLen{334}, kDefaultInitialEvalFunc);
@@ -151,7 +151,7 @@ TEST_F(QueryTest, LoopUp_UnknownSuperior) {
   const SearchAmount amount{334};
 
   entries_[0].Init(board_key_, MakeHand<PAWN>());
-  entries_[0].UpdateUnknown(depth_, pn, dn, amount, 0, HAND_ZERO);
+  entries_[0].UpdateUnknown(depth_, pn, dn, amount);
 
   bool does_have_old_child{false};
   const auto result = query_.LookUp(does_have_old_child, MateLen{334}, kDefaultInitialEvalFunc);
@@ -167,7 +167,7 @@ TEST_F(QueryTest, LoopUp_UnknownInferior) {
   const SearchAmount amount{334};
 
   entries_[0].Init(board_key_, MakeHand<PAWN, LANCE, LANCE, GOLD>());
-  entries_[0].UpdateUnknown(depth_, pn, dn, amount, 0, HAND_ZERO);
+  entries_[0].UpdateUnknown(depth_, pn, dn, amount);
 
   bool does_have_old_child{false};
   const auto result = query_.LookUp(does_have_old_child, MateLen{334}, kDefaultInitialEvalFunc);
@@ -207,36 +207,6 @@ TEST_F(QueryTest, LoopUp_Disproven) {
   EXPECT_EQ(result.Len(), MateLen{3340});
   EXPECT_EQ(result.Amount(), entries_[0].Amount());
   EXPECT_EQ(result.GetFinalData().hand, hand);
-}
-
-TEST_F(QueryTest, LookUpParent_Empty) {
-  PnDn pn{1}, dn{1};
-  const auto parent_key_hand_pair = query_.LookUpParent(pn, dn);
-  EXPECT_EQ(parent_key_hand_pair, std::nullopt);
-}
-
-TEST_F(QueryTest, LookUpParent_NoData) {
-  PnDn pn{1}, dn{1};
-  entries_[3].Init(board_key_, hand_);
-  const auto parent_key_hand_pair = query_.LookUpParent(pn, dn);
-  EXPECT_EQ(parent_key_hand_pair, std::nullopt);
-}
-
-TEST_F(QueryTest, LookUpParent_Exact) {
-  const PnDn ans_pn{33};
-  const PnDn ans_dn{4};
-  const Key board_key{0x3304};
-  const Hand hand{MakeHand<PAWN, LANCE, LANCE>()};
-
-  entries_[0].Init(board_key_, hand_);
-  entries_[0].UpdateUnknown(264, ans_pn, ans_dn, 1, board_key, hand);
-  PnDn pn{1}, dn{1};
-  const auto parent_key_hand_pair = query_.LookUpParent(pn, dn);
-  ASSERT_NE(parent_key_hand_pair, std::nullopt);
-  EXPECT_EQ(parent_key_hand_pair->board_key, board_key);
-  EXPECT_EQ(parent_key_hand_pair->hand, hand);
-  EXPECT_EQ(pn, ans_pn);
-  EXPECT_EQ(dn, ans_dn);
 }
 
 TEST_F(QueryTest, FinalRange_Normal) {

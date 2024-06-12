@@ -171,31 +171,6 @@ class Query {
   // LCOV_EXCL_STOP NOLINTEND
 
   /**
-   * @brief 置換表に保存された現局面の親局面を取得する
-   * @param[out] pn 現局面のpn
-   * @param[out] dn 現局面のdn
-   * @return 現局面の親局面
-   */
-  std::optional<BoardKeyHandPair> LookUpParent(PnDn& pn, PnDn& dn) const noexcept {
-    pn = dn = 1;
-
-    Key parent_board_key = kNullKey;
-    Hand parent_hand = kNullHand;
-    for (auto itr = initial_entry_pointer_; !itr->IsNull(); ++itr) {
-      const std::shared_lock lock(*itr);
-      if (itr->IsFor(board_key_)) {
-        itr->UpdateParentCandidate(hand_, pn, dn, parent_board_key, parent_hand);
-      }
-    }
-
-    if (parent_hand == kNullHand) {
-      return std::nullopt;
-    }
-
-    return BoardKeyHandPair{parent_board_key, parent_hand};
-  }
-
-  /**
    * @brief 詰み／不詰手数専用の LookUp()
    * @return pair<最長不詰手数、最短詰み手数>
    *
@@ -226,11 +201,9 @@ class Query {
   /**
    * @brief 探索結果 `result` を置換表に書き込む
    * @param result 探索結果
-   * @param parent_key_hand_pair 親局面の盤面ハッシュ値と持ち駒のペア
    * @note 実際の処理は `SetProven()`, `SetDisproven()`, `SetRepetition()`, `SetUnknown()` を参照。
    */
-  void SetResult(const SearchResult& result,
-                 BoardKeyHandPair parent_key_hand_pair = BoardKeyHandPair{kNullKey, kNullHand}) const noexcept {
+  void SetResult(const SearchResult& result) const noexcept {
     if (result.Pn() == 0) {
       SetFinal<true>(result);
     } else if (result.Dn() == 0) {
@@ -240,7 +213,7 @@ class Query {
         SetFinal<false>(result);
       }
     } else {
-      SetUnknown(result, parent_key_hand_pair);
+      SetUnknown(result);
     }
   }
 
@@ -309,14 +282,13 @@ class Query {
    * @brief 探索中の探索結果 `result` を置換表に書き込む関数
    * @param result 探索結果（探索中）
    */
-  void SetUnknown(const SearchResult& result, BoardKeyHandPair parent_key_hand_pair) const noexcept {
+  void SetUnknown(const SearchResult& result) const noexcept {
     const auto pn = result.Pn();
     const auto dn = result.Dn();
     const auto amount = result.Amount();
-    const auto [parent_board_key, parent_hand] = parent_key_hand_pair;
 
     auto* const entry = FindOrCreate(hand_);
-    entry->UpdateUnknown(depth_, pn, dn, amount, parent_board_key, parent_hand);
+    entry->UpdateUnknown(depth_, pn, dn, amount);
     entry->unlock();
   }
 

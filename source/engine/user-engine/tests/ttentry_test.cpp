@@ -58,16 +58,9 @@ TEST(EntryTest, CutAmount) {
   entry.CutAmount();
   EXPECT_GT(entry.Amount(), 0);
 
-  entry.UpdateUnknown(0, 1, 1, 334, 0, HAND_ZERO);
+  entry.UpdateUnknown(0, 1, 1, 334);
   entry.CutAmount();
   EXPECT_EQ(entry.Amount(), 334 / 2);
-}
-
-TEST(EntryTest, Init_Parent) {
-  Entry entry;
-  entry.Init(0x334, HAND_ZERO);
-  EXPECT_EQ(entry.GetParentBoardKey(), komori::kNullKey);
-  EXPECT_EQ(entry.GetParentHand(), komori::kNullHand);
 }
 
 TEST(EntryTest, UpdateUnknown_MinDepth) {
@@ -77,25 +70,14 @@ TEST(EntryTest, UpdateUnknown_MinDepth) {
   const Depth depth2{264};
 
   entry.Init(0x264, HAND_ZERO);
-  entry.UpdateUnknown(depth1, 1, 1, 1, 0, HAND_ZERO);
-  entry.UpdateUnknown(depth2, 1, 1, 1, 0, HAND_ZERO);
+  entry.UpdateUnknown(depth1, 1, 1, 1);
+  entry.UpdateUnknown(depth2, 1, 1, 1);
   EXPECT_EQ(entry.MinDepth(), depth2);
 
   entry.Init(0x264, HAND_ZERO);
-  entry.UpdateUnknown(depth2, 1, 1, 1, 0, HAND_ZERO);
-  entry.UpdateUnknown(depth1, 1, 1, 1, 0, HAND_ZERO);
+  entry.UpdateUnknown(depth2, 1, 1, 1);
+  entry.UpdateUnknown(depth1, 1, 1, 1);
   EXPECT_EQ(entry.MinDepth(), depth2);
-}
-
-TEST(EntryTest, UpdateUnknown_Parent) {
-  Entry entry;
-  const Key board_key{0x3304};
-  const Hand hand{MakeHand<PAWN, LANCE, LANCE>()};
-  entry.Init(0x264, HAND_ZERO);
-  entry.UpdateUnknown(334, 1, 1, 1, board_key, hand);
-
-  EXPECT_EQ(entry.GetParentBoardKey(), board_key);
-  EXPECT_EQ(entry.GetParentHand(), hand);
 }
 
 TEST(EntryTest, LookUp_MinDepth) {
@@ -109,7 +91,7 @@ TEST(EntryTest, LookUp_MinDepth) {
   bool use_old_child{false};
 
   entry.Init(0x264, hand);
-  entry.UpdateUnknown(depth1, 1, 1, 1, 0, HAND_ZERO);
+  entry.UpdateUnknown(depth1, 1, 1, 1);
   entry.LookUp(MakeHand<PAWN, LANCE>(), depth2, len, pn, dn, use_old_child);
   EXPECT_EQ(entry.MinDepth(), depth1);  // 劣等局面では depth を更新しない
 
@@ -130,7 +112,7 @@ TEST(EntryTest, LookUp_PnDn_Exact) {
   bool use_old_child{false};
 
   entry.Init(0x264, hand);
-  entry.UpdateUnknown(depth1, 33, 4, 1, 0, HAND_ZERO);
+  entry.UpdateUnknown(depth1, 33, 4, 1);
   const auto ret1 = entry.LookUp(hand, depth1, len, pn, dn, use_old_child);
   EXPECT_TRUE(ret1);
   EXPECT_EQ(pn, 33);
@@ -161,7 +143,7 @@ TEST(EntryTest, LookUp_PnDn_Superior) {
   bool use_old_child{false};
 
   entry.Init(0x264, hand1);
-  entry.UpdateUnknown(depth1, 33, 4, 1, 0, HAND_ZERO);
+  entry.UpdateUnknown(depth1, 33, 4, 1);
   const auto ret1 = entry.LookUp(hand2, depth2, len, pn, dn, use_old_child);
   EXPECT_TRUE(ret1);
   EXPECT_EQ(pn, 1);
@@ -192,7 +174,7 @@ TEST(EntryTest, LookUp_PnDn_Inferior) {
   bool use_old_child{false};
 
   entry.Init(0x264, hand1);
-  entry.UpdateUnknown(depth1, 33, 4, 1, 0, HAND_ZERO);
+  entry.UpdateUnknown(depth1, 33, 4, 1);
   const auto ret1 = entry.LookUp(hand2, depth2, len, pn, dn, use_old_child);
   EXPECT_TRUE(ret1);
   EXPECT_EQ(pn, 33);
@@ -263,64 +245,10 @@ TEST(EntryTest, LookUp_PnDn_Disproven) {
   EXPECT_EQ(dn, 0);
 }
 
-TEST(EntryTest, UpdateParentCandidate_DoNothing) {
-  Entry entry;
-  entry.Init(0x264, MakeHand<PAWN, LANCE, LANCE>());
-  entry.UpdateUnknown(334, 33, 4, 1, 33, HAND_ZERO);
-  PnDn pn{1};
-  PnDn dn{1};
-  Key parent_key{komori::kNullKey};
-  Hand parent_hand{komori::kNullHand};
-
-  // 関係ない局面を渡す -> ローカル変数は書き換わらないはず
-  entry.UpdateParentCandidate(MakeHand<GOLD>(), pn, dn, parent_key, parent_hand);
-
-  EXPECT_EQ(pn, 1);
-  EXPECT_EQ(dn, 1);
-  EXPECT_EQ(parent_key, komori::kNullKey);
-  EXPECT_EQ(parent_hand, komori::kNullHand);
-}
-
-TEST(EntryTest, UpdateParentCandidate_UseInferiorParent) {
-  Entry entry;
-  entry.Init(0x264, MakeHand<PAWN, LANCE, LANCE>());
-  entry.UpdateUnknown(334, 33, 4, 1, 334, MakeHand<LANCE, LANCE>());
-  PnDn pn{1};
-  PnDn dn{1};
-  Key parent_key{komori::kNullKey};
-  Hand parent_hand{komori::kNullHand};
-
-  // 関係ない局面を渡す -> ローカル変数は書き換わらないはず
-  entry.UpdateParentCandidate(MakeHand<PAWN>(), pn, dn, parent_key, parent_hand);
-
-  EXPECT_EQ(pn, 33);
-  EXPECT_EQ(dn, 1);
-  EXPECT_EQ(parent_key, 334);
-  EXPECT_EQ(parent_hand, HAND_ZERO);
-}
-
-TEST(EntryTest, UpdateParentCandidate_UseSuperiorParent) {
-  Entry entry;
-  entry.Init(0x264, MakeHand<PAWN, LANCE, LANCE>());
-  entry.UpdateUnknown(334, 33, 4, 1, 334, MakeHand<LANCE, LANCE>());
-  PnDn pn{1};
-  PnDn dn{1};
-  Key parent_key{komori::kNullKey};
-  Hand parent_hand{komori::kNullHand};
-
-  // 関係ない局面を渡す -> ローカル変数は書き換わらないはず
-  entry.UpdateParentCandidate(MakeHand<PAWN, LANCE, LANCE, LANCE, GOLD>(), pn, dn, parent_key, parent_hand);
-
-  EXPECT_EQ(pn, 1);
-  EXPECT_EQ(dn, 4);
-  EXPECT_EQ(parent_key, 334);
-  EXPECT_EQ(parent_hand, (MakeHand<LANCE, LANCE, LANCE, GOLD>()));
-}
-
 TEST(EntryTest, SetPossibleRepetition_PnDn) {
   Entry entry;
   entry.Init(0x264, HAND_ZERO);
-  entry.UpdateUnknown(334, 33, 4, 1, 0, HAND_ZERO);
+  entry.UpdateUnknown(334, 33, 4, 1);
   entry.SetPossibleRepetition();
   EXPECT_EQ(entry.Pn(), 1);
   EXPECT_EQ(entry.Dn(), 1);
@@ -382,7 +310,7 @@ TEST(EntryTest, LookUp_UseOldChild_Superior) {
   bool use_old_child{false};
 
   entry.Init(0x264, hand1);
-  entry.UpdateUnknown(depth1, 33, 4, 1, 0, HAND_ZERO);
+  entry.UpdateUnknown(depth1, 33, 4, 1);
   entry.LookUp(hand2, depth2, len, pn, dn, use_old_child);
   EXPECT_TRUE(use_old_child);
 
@@ -403,7 +331,7 @@ TEST(EntryTest, LookUp_UseOldChild_Inferior) {
   bool use_old_child{false};
 
   entry.Init(0x264, hand1);
-  entry.UpdateUnknown(depth1, 33, 4, 1, 0, HAND_ZERO);
+  entry.UpdateUnknown(depth1, 33, 4, 1);
   entry.LookUp(hand2, depth2, len, pn, dn, use_old_child);
   EXPECT_TRUE(use_old_child);
 
@@ -416,7 +344,7 @@ TEST(EntryTest, UpdateUnknown_Amount) {
   Entry entry;
   const SearchAmount amount{334};
   entry.Init(0x264, HAND_ZERO);
-  entry.UpdateUnknown(264, 26, 4, amount, 0, HAND_ZERO);
+  entry.UpdateUnknown(264, 26, 4, amount);
   EXPECT_EQ(entry.Amount(), 1 / 2 + amount);
 }
 
@@ -424,7 +352,7 @@ TEST(EntryTest, UpdateUnknown_SaturatedAmount) {
   Entry entry;
   const SearchAmount amount{std::numeric_limits<SearchAmount>::max()};
   entry.Init(0x264, HAND_ZERO);
-  entry.UpdateUnknown(264, 26, 4, amount, 0, HAND_ZERO);
+  entry.UpdateUnknown(264, 26, 4, amount);
   EXPECT_EQ(entry.Amount(), amount);
 }
 
@@ -433,7 +361,7 @@ TEST(EntryTest, UpdateProven_Amount) {
   const SearchAmount amount1{334};
   const SearchAmount amount2{264};
   entry.Init(0x264, HAND_ZERO);
-  entry.UpdateUnknown(264, 26, 4, amount1, 0, HAND_ZERO);
+  entry.UpdateUnknown(264, 26, 4, amount1);
   entry.UpdateProven(MateLen{334}, amount2);
   EXPECT_EQ(entry.Amount(), amount2 + kFinalAmountBonus);
 }
@@ -443,7 +371,7 @@ TEST(EntryTest, UpdateDisproven_Amount) {
   const SearchAmount amount1{334};
   const SearchAmount amount2{264};
   entry.Init(0x264, HAND_ZERO);
-  entry.UpdateUnknown(264, 26, 4, amount1, 0, HAND_ZERO);
+  entry.UpdateUnknown(264, 26, 4, amount1);
   entry.UpdateDisproven(MateLen{334}, amount2);
   EXPECT_EQ(entry.Amount(), amount2 + kFinalAmountBonus);
 }
