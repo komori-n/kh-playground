@@ -204,9 +204,9 @@ enum class NodeState {
  * 16ビット整数または32ビット整数。weak df-pnを使う限り、感覚的には16ビット変数に収まる気がするが、
  * 厳密に 16 ビットに収まっているかは未検証。
  */
-using PnDn = std::uint32_t;
+using PnDn = std::uint16_t;
 /// pn/dn の最大値。オーバーフローを避けるために、max() より少し小さな値を設定する。
-inline constexpr PnDn kInfinitePnDn = std::numeric_limits<PnDn>::max() / 2 - 1;
+inline constexpr PnDn kInfinitePnDn = std::numeric_limits<PnDn>::max() - 2 * kMaxCheckMovesPerNode;
 /// pn/dn 値の単位。df-pn+ では「評価値0.5」のような小数を扱いたいので1より大きな値を用いれるようにする。
 inline constexpr PnDn kPnDnUnit = 2;
 /**
