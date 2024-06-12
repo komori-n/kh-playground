@@ -132,22 +132,15 @@ class LocalExpansion {
    * @param n   現局面
    * @param len 残り詰み手数
    * @param first_search 初回探索なら `true`。`true` なら高速 1 手詰めルーチンを走らせる。
-   * @param sum_mask δ値を和で計算する子の集合
    * @param multi_pv 勝ちになる手をいくつ見つけるか。1以上でなければならない
    */ // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-  LocalExpansion(tt::TranspositionTable& tt,
-                 const Node& n,
-                 MateLen len,
-                 bool first_search,
-                 BitSet64 sum_mask = BitSet64::Full(),
-                 std::uint32_t multi_pv = 1)
+  LocalExpansion(tt::TranspositionTable& tt, const Node& n, MateLen len, bool first_search, std::uint32_t multi_pv = 1)
       : or_node_{n.IsOrNode()},
         mp_{n, true},
         delayed_move_list_{n, mp_},
         len_{len},
         key_hand_pair_{n.GetBoardKeyHandPair()},
-        multi_pv_{multi_pv},
-        sum_mask_{sum_mask} {
+        multi_pv_{multi_pv} {
     // 1手詰め／1手不詰判定のために、const を一時的に外す
     Node& nn = const_cast<Node&>(n);
 
@@ -174,10 +167,6 @@ class LocalExpansion {
             query.LookUp(does_have_old_child_, len - 1, [&n, &move = move]() { return InitialPnDn(n, move.move); });
 
         if (!result.IsFinal()) {
-          if (!IsSumDeltaNode(n, move.move) || result.Delta(or_node_) >= detail::kForceSumPnDn) {
-            sum_mask_.Reset(i_raw);
-          }
-
           bool i_is_skipped = false;
           auto next_dep = delayed_move_list_.Prev(i_raw);
           while (next_dep.has_value()) {
@@ -252,14 +241,6 @@ class LocalExpansion {
    * @pre !CurrentResult().IsFinal()
    */
   bool FrontIsFirstVisit() const { return FrontResult().GetUnknownData().is_first_visit; }
-  /**
-   * @brief 最善手の Sum Mask
-   * @pre !CurrentResult().IsFinal()
-   */
-  BitSet64 FrontSumMask() const {
-    const auto& result = FrontResult();
-    return result.GetUnknownData().sum_mask;
-  }
 
   /**
    * @brief (Move, SearchResult) のペアを良さげ順にすべて取得する
@@ -300,9 +281,6 @@ class LocalExpansion {
 
     result = search_result;
     query.SetResult(search_result, key_hand_pair_);
-    if (!result.IsFinal() && result.Delta(or_node_) >= detail::kForceSumPnDn) {
-      sum_mask_.Reset(old_i_raw);
-    }
 
     if (result.IsFinal()) {
       valid_child_num_--;
@@ -568,7 +546,7 @@ class LocalExpansion {
   SearchResult GetUnknownResult(const Node& /* n */) const {
     const auto& result = FrontResult();
     const SearchAmount amount = result.Amount() + mp_.size() - 1;
-    return SearchResult::MakeUnknown(GetPn(), GetDn(), len_, amount, sum_mask_);
+    return SearchResult::MakeUnknown(GetPn(), GetDn(), len_, amount);
   }
 
   /**
@@ -625,8 +603,6 @@ class LocalExpansion {
   PnDn delta_max_{};        ///< δの最大値
   PnDn valid_child_num_{};  ///< 有効な子（idx_ に入っていて、かつfinalでない子）の数
 
-  /// δ値を和で計算すべき子の一覧。ビットが立っている子は和、立っていない子は最大値で計上する。
-  BitSet64 sum_mask_;
   /// 現在有効な生添字の一覧。「良さ順」で並んでいる。
   FixedSizeStack<std::uint32_t, kMaxCheckMovesPerNode> idx_;
 

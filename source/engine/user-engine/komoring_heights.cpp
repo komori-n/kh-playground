@@ -258,7 +258,7 @@ SearchResult KomoringHeights::SearchEntry(Node& n, MateLen len) {
   PnDn thpn = (len == kDepthMaxMateLen) ? tl_thread_id : kInfinitePnDn;
   PnDn thdn = (len == kDepthMaxMateLen) ? tl_thread_id : kInfinitePnDn;
 
-  expansion_list_[tl_thread_id].Emplace(tt_, n, len, true, BitSet64::Full(), option_.multi_pv);
+  expansion_list_[tl_thread_id].Emplace(tt_, n, len, true, option_.multi_pv);
   if (tl_thread_id == 0 && n.GetDepth() == 0) {
     for (const auto& [move, result] : expansion_list_[0].Root().GetAllResults()) {
       if (!result.IsFinal()) {
@@ -320,11 +320,10 @@ SearchResult KomoringHeights::SearchImplForRoot(Node& n, PnDn thpn, PnDn thdn, M
   while (!monitor_.ShouldStop() && (curr_result.Pn() < thpn && curr_result.Dn() < thdn)) {
     const auto best_move = local_expansion.BestMove();
     const bool is_first_search = local_expansion.FrontIsFirstVisit();
-    const BitSet64 sum_mask = local_expansion.FrontSumMask();
     const auto [child_thpn, child_thdn] = local_expansion.FrontPnDnThresholds(thpn, thdn);
 
     n.DoMove(best_move);
-    auto& child_expansion = expansion_list_[tl_thread_id].Emplace(tt_, n, len - 1, is_first_search, sum_mask);
+    auto& child_expansion = expansion_list_[tl_thread_id].Emplace(tt_, n, len - 1, is_first_search);
 
     SearchResult child_result;
     if (is_first_search) {
@@ -401,13 +400,12 @@ SearchResult KomoringHeights::SearchImpl(Node& n, PnDn thpn, PnDn thdn, MateLen 
     // （curr_result.Pn() > 0 && curr_result.Dn() > 0 なので、BestMove が必ず存在する）
     const auto best_move = local_expansion.BestMove();
     const bool is_first_search = local_expansion.FrontIsFirstVisit();
-    const BitSet64 sum_mask = local_expansion.FrontSumMask();
     const auto [child_thpn, child_thdn] = local_expansion.FrontPnDnThresholds(thpn, thdn);
 
     n.DoMove(best_move);
 
     // 子局面を展開する。展開した expansion は UndoMove() の直前に忘れずに開放しなければならない。
-    auto& child_expansion = expansion_list_[tl_thread_id].Emplace(tt_, n, len - 1, is_first_search, sum_mask);
+    auto& child_expansion = expansion_list_[tl_thread_id].Emplace(tt_, n, len - 1, is_first_search);
 
     SearchResult child_result;
     if (is_first_search) {
@@ -491,7 +489,7 @@ std::pair<Move, MateLen> KomoringHeights::GetBestMoveOrNode(Node& n, MateLen len
     }
   }
 
-  auto& expansion = expansion_list_[tl_thread_id].Emplace(tt_, n, len, true, BitSet64::Full(), option_.multi_pv);
+  auto& expansion = expansion_list_[tl_thread_id].Emplace(tt_, n, len, true, option_.multi_pv);
   std::uint32_t inc_flag = 0;
   SearchImpl(n, kInfinitePnDn, kInfinitePnDn, len, inc_flag);
   // exclude を無視して最善手を取りたいので、expansion.BestMove() は使えないので注意。
@@ -510,7 +508,7 @@ std::pair<Move, MateLen> KomoringHeights::GetBestMoveOrNode(Node& n, MateLen len
 std::pair<Move, MateLen> KomoringHeights::GetBestMoveAndNode(Node& n, MateLen len, bool exact) {
   KOMORI_PRECONDITION(!n.IsOrNode());
   if (exact) {
-    auto& expansion = expansion_list_[tl_thread_id].Emplace(tt_, n, len - 2, true, BitSet64::Full(), option_.multi_pv);
+    auto& expansion = expansion_list_[tl_thread_id].Emplace(tt_, n, len - 2, true, option_.multi_pv);
     std::uint32_t inc_flag = 0;
     SearchImpl(n, kInfinitePnDn, kInfinitePnDn, len - 2, inc_flag);
     // exclude を無視して最善手を取りたいので、expansion.BestMove() は使えないので注意。
@@ -529,7 +527,7 @@ std::pair<Move, MateLen> KomoringHeights::GetBestMoveAndNode(Node& n, MateLen le
       return {move, proven_len};
     }
 
-    auto& expansion = expansion_list_[tl_thread_id].Emplace(tt_, n, len, true, BitSet64::Full(), option_.multi_pv);
+    auto& expansion = expansion_list_[tl_thread_id].Emplace(tt_, n, len, true, option_.multi_pv);
     std::uint32_t inc_flag = 0;
     SearchImpl(n, kInfinitePnDn, kInfinitePnDn, len, inc_flag);
     // exclude を無視して最善手を取りたいので、expansion.BestMove() は使えないので注意。

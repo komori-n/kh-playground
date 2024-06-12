@@ -121,7 +121,6 @@ class Query {
     SearchAmount amount = 1;
 
     bool found_exact = false;
-    BitSet64 sum_mask = BitSet64::Full();
 
     for (auto itr = initial_entry_pointer_; !itr->IsNull(); ++itr) {
       std::shared_lock lock(*itr);
@@ -143,7 +142,6 @@ class Query {
             }
 
             found_exact = true;
-            sum_mask = itr->SumMask();
             cached_entry_ = &*itr;
           }
         }
@@ -161,7 +159,7 @@ class Query {
     }
 
     if (found_exact) {
-      return SearchResult::MakeUnknown(pn, dn, len, amount, sum_mask);
+      return SearchResult::MakeUnknown(pn, dn, len, amount);
     }
 
     const auto [init_pn, init_dn] = std::forward<InitialEvalFunc>(eval_func)();
@@ -315,11 +313,10 @@ class Query {
     const auto pn = result.Pn();
     const auto dn = result.Dn();
     const auto amount = result.Amount();
-    const auto sum_mask = result.GetUnknownData().sum_mask;
     const auto [parent_board_key, parent_hand] = parent_key_hand_pair;
 
     auto* const entry = FindOrCreate(hand_);
-    entry->UpdateUnknown(depth_, pn, dn, amount, sum_mask, parent_board_key, parent_hand);
+    entry->UpdateUnknown(depth_, pn, dn, amount, parent_board_key, parent_hand);
     entry->unlock();
   }
 

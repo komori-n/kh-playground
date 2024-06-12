@@ -12,7 +12,6 @@ namespace komori {
 /// 結論が出ていないノード（Unknown）の探索結果
 struct UnknownData {
   // NOLINTBEGIN(misc-non-private-member-variables-in-classes)
-  BitSet64 sum_mask;    ///< δ値を和で計算すべき子の集合
   bool is_first_visit;  ///< 初めて訪れた局面かどうか
   // NOLINTEND(misc-non-private-member-variables-in-classes)
 };
@@ -50,7 +49,7 @@ class SearchResult {
    * @param amount          探索量
    */
   static constexpr SearchResult MakeFirstVisit(PnDn pn, PnDn dn, MateLen len, SearchAmount amount) {
-    return {pn, dn, len, amount, UnknownData{BitSet64::Full(), true}};
+    return {pn, dn, len, amount, UnknownData{true}};
   }
 
   /**
@@ -59,10 +58,9 @@ class SearchResult {
    * @param dn              dn
    * @param len             探索時の残り手数
    * @param amount          探索量
-   * @param sum_mask        δ値を和で計算すべき子の集合
    */
-  static constexpr SearchResult MakeUnknown(PnDn pn, PnDn dn, MateLen len, SearchAmount amount, BitSet64 sum_mask) {
-    return {pn, dn, len, amount, UnknownData{sum_mask, false}};
+  static constexpr SearchResult MakeUnknown(PnDn pn, PnDn dn, MateLen len, SearchAmount amount) {
+    return {pn, dn, len, amount, UnknownData{false}};
   }
 
   /**

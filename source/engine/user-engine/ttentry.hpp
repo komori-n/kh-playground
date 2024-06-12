@@ -171,8 +171,7 @@ class alignas(64) Entry {
         repetition_state_{entry.repetition_state_},
         min_depth_{entry.min_depth_.load(std::memory_order_relaxed)},
         parent_hand_{entry.parent_hand_},
-        parent_board_key_{entry.parent_board_key_},
-        sum_mask_{entry.sum_mask_} {}
+        parent_board_key_{entry.parent_board_key_} {}
   /**
    * @brief Copy assign operator
    *
@@ -190,7 +189,6 @@ class alignas(64) Entry {
     min_depth_.store(entry.min_depth_.load(std::memory_order_relaxed), std::memory_order_relaxed);
     parent_hand_ = entry.parent_hand_;
     parent_board_key_ = entry.parent_board_key_;
-    sum_mask_ = entry.sum_mask_;
 
     return *this;
   }
@@ -216,7 +214,6 @@ class alignas(64) Entry {
 
     parent_hand_ = kNullHand;
     parent_board_key_ = kNullKey;
-    sum_mask_ = BitSet64::Full();
   }
 
   /// エントリの排他ロックを取る
@@ -268,8 +265,6 @@ class alignas(64) Entry {
   Key GetParentBoardKey() const noexcept { return parent_board_key_; }
   /// 親局面の持ち駒
   Hand GetParentHand() const noexcept { return parent_hand_; }
-  /// δ値を和で計算すべき子の集合
-  BitSet64 SumMask() const noexcept { return sum_mask_; }
   /// 盤面ハッシュ値（コンパクション用）
   Key BoardKey() const noexcept { return board_key_; }
 
@@ -298,7 +293,6 @@ class alignas(64) Entry {
    * @param pn     pn
    * @param dn     dn
    * @param amount 探索量
-   * @param sum_mask δ値を和で計算する子の集合
    * @param parent_board_key 親局面の盤面ハッシュ値
    * @param parent_hand 親局面の攻め方の持ち駒
    * @pre `IsFor(board_key, hand)` （`board_key`, `hand` は現局面の盤面ハッシュ、持ち駒）
@@ -307,7 +301,6 @@ class alignas(64) Entry {
                      PnDn pn,
                      PnDn dn,
                      SearchAmount amount,
-                     BitSet64 sum_mask,
                      Key parent_board_key,
                      Hand parent_hand) noexcept {
     const auto depth16 = static_cast<std::int16_t>(depth);
@@ -316,7 +309,6 @@ class alignas(64) Entry {
     dn_ = dn;
     parent_board_key_ = parent_board_key;
     parent_hand_ = parent_hand;
-    sum_mask_ = sum_mask;
     amount_ = std::max(amount_, amount);
   }
 
@@ -594,7 +586,6 @@ class alignas(64) Entry {
 
   Hand parent_hand_;      ///< 親局面の持ち駒
   Key parent_board_key_;  ///< 親局面の盤面ハッシュ値
-  BitSet64 sum_mask_{};   ///< δ値を和で計算する子の集合
 };
 
 static_assert(sizeof(SearchAmount) == 4, "The size of SearchAmount must be 4.");
