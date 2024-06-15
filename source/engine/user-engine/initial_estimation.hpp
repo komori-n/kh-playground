@@ -13,7 +13,7 @@
 namespace komori {
 namespace detail {
 /// 駒のざっくりとした価値。スレッドごとに微妙に乱数を加えたいので thread_local にしている。
-thread_local inline int tl_pt_values[] = {0, 36, 37, 59, 141, 140, 60, 112, 63, 10, 19, 61, 45, 112, 69, 143};
+thread_local inline int tl_pt_values[] = {0, 0, 53, 74, 136, 123, 23, 119, 52, 26, 87, 12, 32, 96, 85, 110};
 
 /// df-pn+ で用いるパラメータたち
 struct DfpnPlusParameters {
@@ -208,7 +208,7 @@ inline int MoveBriefEvaluation(const Node& n, Move move) {
 
   auto after_pt = type_of(n.Pos().moved_piece_after(move));
   value -= detail::tl_pt_values[after_pt];
-  value += 10 * dist(king_sq, to);
+  value += dist(king_sq, to) * 20;
 
   return value;
 }
