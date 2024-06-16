@@ -201,10 +201,13 @@ enum class NodeState {
 /**
  * @brief 証明数／反証数を格納する型
  *
- * 16ビット整数または32ビット整数。weak df-pnを使う限り、感覚的には16ビット変数に収まる気がするが、
- * 厳密に 16 ビットに収まっているかは未検証。
+ * 16/32/64ビットの符号なし整数。ただし、何も特別な対策をせずに16ビット整数を用いると、以下の局面で
+ * dnがオーバーフローすることがわかっている。
+ *
+ *    やねうら王 500万問詰将棋問題集 11手詰 294217番
+ *    sfen ln3p1+R1/4k4/2p3p2/3Sp4/p4P2p/P4+bP2/4P3P/3+p1G3/LN3K3 w R3S2N2Pb3g2l4p 1
  */
-using PnDn = std::uint16_t;
+using PnDn = std::uint32_t;
 /// pn/dn の最大値。オーバーフローを避けるために、max() より少し小さな値を設定する。
 inline constexpr PnDn kInfinitePnDn = std::numeric_limits<PnDn>::max() - 2 * kMaxCheckMovesPerNode;
 /// pn/dn 値の単位。df-pn+ では「評価値0.5」のような小数を扱いたいので1より大きな値を用いれるようにする。
