@@ -6,12 +6,13 @@
 
 #include <algorithm>
 #include <optional>
+#include <thread>
 #include <utility>
 
-#include "delayed_move_list.hpp"
 #include "fixed_size_stack.hpp"
 #include "hands.hpp"
 #include "initial_estimation.hpp"
+#include "lazy_expansion_table.hpp"
 #include "move_picker.hpp"
 #include "node.hpp"
 #include "ranges.hpp"
@@ -63,7 +64,7 @@ inline std::optional<SearchResult> CheckObviousFinalOrNode(Node& n) {
  * 「良さげ順」でアクセスすることができる。
  *
  * スタック構造を活かして探索中に `idx_` へ生添字を追加することもできる。これは、
- * 指し手の遅延展開（`delayed_move_list_`）に用いられる。
+ * 指し手の遅延展開（`lazy_expansion_`）に用いられる。
  *
  * ### MultiPV
  *
@@ -108,7 +109,7 @@ class LocalExpansion {
    * @param multi_pv 勝ちになる手をいくつ見つけるか。1以上でなければならない
    */ // NOLINTNEXTLINE(readability-function-cognitive-complexity)
   LocalExpansion(tt::TranspositionTable& tt, const Node& n, MateLen len, bool first_search, std::uint32_t multi_pv = 1)
-      : or_node_{n.IsOrNode()}, mp_{n, true}, delayed_move_list_{n, mp_}, len_{len}, multi_pv_{multi_pv} {
+      : or_node_{n.IsOrNode()}, mp_{n, true}, len_{len}, multi_pv_{multi_pv}, lazy_expansion_{n, mp_} {
     // 1手詰め／1手不詰判定のために、const を一時的に外す
     Node& nn = const_cast<Node&>(n);
 
@@ -135,22 +136,9 @@ class LocalExpansion {
             query.LookUp(does_have_old_child_, len - 1, [&n, &move = move]() { return InitialPnDn(n, move.move); });
 
         if (!result.IsFinal()) {
-          bool i_is_skipped = false;
-          auto next_dep = delayed_move_list_.Prev(i_raw);
-          while (next_dep.has_value()) {
-            // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-            if (!results_[*next_dep].IsFinal()) {
-              // i_raw は next_dep の負けが確定した後で探索する
-              i_is_skipped = true;
-              idx_.Pop();
-              break;
-            }
-
-            // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-            next_dep = delayed_move_list_.Prev(*next_dep);
-          }
-
-          if (!i_is_skipped && !or_node_ && first_search && result.GetUnknownData().is_first_visit) {
+          if (lazy_expansion_.HasPrev(i_raw)) {
+            idx_.Pop();
+          } else if (!or_node_ && first_search && result.GetUnknownData().is_first_visit) {
             nn.DoMove(move.move);
             if (auto res = detail::CheckObviousFinalOrNode(nn); res.has_value()) {
               result = *res;
@@ -162,6 +150,10 @@ class LocalExpansion {
       }
 
     CHILD_LOOP_END:
+      if (result.IsFinal()) {
+        lazy_expansion_.Remove(i_raw);
+      }
+
       if (result.Phi(or_node_) == 0) {
         if (excluded_moves_ >= multi_pv_ - 1) {
           break;
@@ -245,7 +237,6 @@ class LocalExpansion {
     const auto& query = queries_[old_i_raw];
     auto& result = results_[old_i_raw];
     const PnDn orig_delta = result.Delta(or_node_);
-    const PnDn new_delta = search_result.Delta(or_node_);
 
     result = search_result;
     query.SetResult(search_result);
@@ -268,43 +259,34 @@ class LocalExpansion {
       }
     }
 
-    if (search_result.IsFinal() && delayed_move_list_.Next(old_i_raw)) {
-      if (search_result.Delta(or_node_) == 0) {
-        // delta==0 の手は最悪手なので並び替えで最後尾へ移動させる
-        ResortFront();
-      }
-
-      // 後回しにした手があるならそれを復活させる
-      // curr_i_raw の次に調べるべき子
-      auto curr_i_raw = delayed_move_list_.Next(old_i_raw);
-      do {
-        idx_.Push(*curr_i_raw);
-        ResortBack();
-        if (results_[*curr_i_raw].Delta(or_node_) > 0) {
-          // まだ結論の出ていない子がいた
-          break;
-        }
-
-        // curr_i_raw は結論が出ているので、次の後回しにした手 next_dep を調べる
-        curr_i_raw = delayed_move_list_.Next(*curr_i_raw);
-      } while (curr_i_raw.has_value());
-
-      RecalcDelta();
-    } else {
-      bool needs_recalc_delta = false;
-      if (new_delta != kInfinitePnDn) {
-        if (delta_max_ < new_delta) {
-          delta_max_ = new_delta;
-        } else if (orig_delta == delta_max_ && new_delta < delta_max_) {
-          // max_delta_except_best_ が更新される可能性がある
-          needs_recalc_delta = true;
-        }
-      }
+    bool needs_recalc_delta = (orig_delta == delta_max_);
+    if (search_result.IsFinal()) {
       ResortFront();
 
-      if (needs_recalc_delta) {
-        RecalcDelta();
+      std::uint32_t j_raw = old_i_raw;
+      if (std::optional<std::uint32_t> maybe_next = lazy_expansion_.Next(j_raw)) {
+        const std::uint32_t next_j_raw = *maybe_next;
+        valid_child_num_++;
+        idx_.Push(next_j_raw);
+
+        const PnDn new_delta = results_[next_j_raw].Delta(or_node_);
+        if (delta_max_ <= new_delta) {
+          delta_max_ = new_delta;
+          needs_recalc_delta = false;
+        }
+        ResortBack();
       }
+    } else {
+      const PnDn new_delta = search_result.Delta(or_node_);
+      if (new_delta != kInfinitePnDn && delta_max_ <= new_delta) {
+        delta_max_ = new_delta;
+        needs_recalc_delta = false;
+      }
+      ResortFront();
+    }
+
+    if (needs_recalc_delta) {
+      RecalcDelta();
     }
   }
 
@@ -554,11 +536,11 @@ class LocalExpansion {
     }
   }
 
-  const bool or_node_;                       ///< 現局面が OR node かどうか
-  const MovePicker mp_;                      ///< 現局面の合法手
-  const DelayedMoveList delayed_move_list_;  ///< 後回しにしている手のグラフ構造
-  const MateLen len_;                        ///< 現局面における残り探索手数
-  const std::uint32_t multi_pv_;             ///< MultiPv の値。1以上でなければならない
+  const bool or_node_;                 ///< 現局面が OR node かどうか
+  const MovePicker mp_;                ///< 現局面の合法手
+  const MateLen len_;                  ///< 現局面における残り探索手数
+  const std::uint32_t multi_pv_;       ///< MultiPv の値。1以上でなければならない
+  LazyExpansionTable lazy_expansion_;  ///< 後回しにしている手のグラフ構造
 
   /// 子の現在の評価値結果一覧
   std::array<SearchResult, kMaxCheckMovesPerNode> results_;
