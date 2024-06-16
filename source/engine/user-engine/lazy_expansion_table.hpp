@@ -110,10 +110,11 @@ class LazyExpansionTable {
       return true;
     }
 
-    // 逆王手でない中合いはだいたい無意味なので後回し
+    // 中合いはだいたい無意味なので後回し
     const auto support_cnt1 = n.Pos().attackers_to(n.Us(), to1).pop_count();
     const auto support_cnt2 = n.Pos().attackers_to(n.Us(), to2).pop_count();
-    if (support_cnt1 == 0 && support_cnt2 == 0 && !n.Pos().gives_check(move1) && !n.Pos().gives_check(move2)) {
+    if (support_cnt1 == 0 && support_cnt2 == 0) {
+      // NOTE: 逆王手の場合に true を返すと、IsSameが同値関係にならないので注意（1敗）
       return true;  // NOLINT(readability-simplify-boolean-expr)
     }
 
