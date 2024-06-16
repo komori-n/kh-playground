@@ -110,9 +110,6 @@ class LocalExpansion {
    */ // NOLINTNEXTLINE(readability-function-cognitive-complexity)
   LocalExpansion(tt::TranspositionTable& tt, const Node& n, MateLen len, bool first_search, std::uint32_t multi_pv = 1)
       : or_node_{n.IsOrNode()}, mp_{n, true}, len_{len}, multi_pv_{multi_pv}, lazy_expansion_{n, mp_} {
-    // 1手詰め／1手不詰判定のために、const を一時的に外す
-    Node& nn = const_cast<Node&>(n);
-
     for (const auto& [i_raw, move] : WithIndex<std::uint32_t>(mp_)) {
       const auto hand_after = n.OrHandAfter(move.move);
       bool should_push = true;
@@ -139,6 +136,8 @@ class LocalExpansion {
           if (lazy_expansion_.HasPrev(i_raw)) {
             should_push = false;
           } else if (!or_node_ && first_search && result.GetUnknownData().is_first_visit) {
+            // 1手詰め／1手不詰判定のために、const を一時的に外す
+            Node& nn = const_cast<Node&>(n);
             nn.DoMove(move.move);
             if (auto res = detail::CheckObviousFinalOrNode(nn); res.has_value()) {
               result = *res;
@@ -156,13 +155,13 @@ class LocalExpansion {
 
       if (result.IsFinal()) {
         lazy_expansion_.Remove(i_raw);
-      }
+        if (result.Phi(or_node_) == 0) {
+          if (excluded_moves_ >= multi_pv_ - 1) {
+            break;
+          }
 
-      if (result.Phi(or_node_) == 0) {
-        if (excluded_moves_ >= multi_pv_ - 1) {
-          break;
+          excluded_moves_++;
         }
-        excluded_moves_++;
       }
     }
 
