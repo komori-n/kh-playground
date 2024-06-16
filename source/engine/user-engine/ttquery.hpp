@@ -15,27 +15,6 @@
 #include "typedefs.hpp"
 
 namespace komori::tt {
-namespace detail {
-/// LookUp() 時に加えるノイズの周期。スレッドごとに値を変えることで探索順序がばらつくようにする。
-thread_local inline std::uint32_t tt_noise_interval = std::numeric_limits<std::uint32_t>::max();
-/// 次にノイズを加えるまでの残り LookUp() 回数。この値が 0 になったらノイズを加える。
-// ただし、numeric_limits::max() であれば一生ノイズを加えない。
-thread_local inline std::uint32_t tt_noise_timing = std::numeric_limits<std::uint32_t>::max();
-}  // namespace detail
-
-/**
- * @brief LookUp() のノイズ周期を初期化する
- * @param thread_id スレッド番号
- */
-inline void InitializeTTNoise(std::uint32_t thread_id) {
-  // main thread にはノイズを載せない
-  if (thread_id != 0) {
-    // 各スレッドに少しずつノイズを乗せる。
-    static constexpr std::uint32_t kNoise[8] = {7, 6, 5, 4, 3, 2, 8, 9};
-    detail::tt_noise_interval += kNoise[(thread_id - 1) % 8];
-    detail::tt_noise_timing = thread_id;
-  }
-}
 
 /**
  * @brief 連続する複数エントリを束ねてまとめて読み書きするためのクラス。
@@ -141,16 +120,6 @@ class Query {
             cached_entry_ = &*itr;
           }
         }
-      }
-    }
-
-    // LookUp() 結果が final でないとき、スレッドごとに決められた周期で pn, dn へノイズを載せる
-    if (detail::tt_noise_timing != std::numeric_limits<std::uint32_t>::max()) {
-      if (detail::tt_noise_timing-- == 0) {
-        detail::tt_noise_timing = detail::tt_noise_interval;
-        // (pn, dn) へノイズを載せる
-        pn++;
-        dn++;
       }
     }
 
