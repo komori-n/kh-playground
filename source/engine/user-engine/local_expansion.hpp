@@ -115,7 +115,7 @@ class LocalExpansion {
 
     for (const auto& [i_raw, move] : WithIndex<std::uint32_t>(mp_)) {
       const auto hand_after = n.OrHandAfter(move.move);
-      idx_.Push(i_raw);
+      bool should_push = true;
       auto& result = results_[i_raw];
       auto& query = queries_[i_raw];
 
@@ -137,7 +137,7 @@ class LocalExpansion {
 
         if (!result.IsFinal()) {
           if (lazy_expansion_.HasPrev(i_raw)) {
-            idx_.Pop();
+            should_push = false;
           } else if (!or_node_ && first_search && result.GetUnknownData().is_first_visit) {
             nn.DoMove(move.move);
             if (auto res = detail::CheckObviousFinalOrNode(nn); res.has_value()) {
@@ -150,6 +150,10 @@ class LocalExpansion {
       }
 
     CHILD_LOOP_END:
+      if (should_push) {
+        idx_.Push(i_raw);
+      }
+
       if (result.IsFinal()) {
         lazy_expansion_.Remove(i_raw);
       }
