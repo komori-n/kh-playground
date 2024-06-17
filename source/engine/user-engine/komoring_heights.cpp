@@ -155,7 +155,7 @@ void KomoringHeights::NewSearch(const Position& n, bool is_root_or_node) {
   pv_list_.NewSearch(node);
 
   if (tt_.Hashfull() >= kExecuteGcHashfullThreshold) {
-    tt_.CollectGarbage(kGcRemovalRatio);
+    tt_.Clear();
   }
 }
 

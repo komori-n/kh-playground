@@ -14,7 +14,7 @@
 namespace komori::tt {
 namespace detail {
 /// 詰み／不詰の探索量のボーナス。これを大きくすることで詰み／不詰エントリが消されづらくなる。
-constexpr inline SearchAmount kFinalAmountBonus{1000};
+constexpr inline SearchAmount kFinalAmountBonus{100};
 }  // namespace detail
 
 /**
@@ -282,7 +282,7 @@ class alignas(32) Entry {
   void UpdateProven(MateLen len, SearchAmount amount) noexcept {
     KOMORI_PRECONDITION(disproven_len_ < len);
     proven_len_ = std::min(proven_len_, len);
-    amount_ = std::max(amount_, SaturatedAdd(amount, detail::kFinalAmountBonus));
+    amount_ = std::max(amount_, SaturatedAdd(amount, len.Len() * detail::kFinalAmountBonus));
   }
 
   /**
@@ -295,7 +295,7 @@ class alignas(32) Entry {
   void UpdateDisproven(MateLen len, SearchAmount amount) noexcept {
     KOMORI_PRECONDITION(len < proven_len_);
     disproven_len_ = std::max(disproven_len_, len);
-    amount_ = std::max(amount_, SaturatedAdd(amount, detail::kFinalAmountBonus));
+    amount_ = std::max(amount_, SaturatedAdd(amount, len.Len() * detail::kFinalAmountBonus));
   }
 
   /**

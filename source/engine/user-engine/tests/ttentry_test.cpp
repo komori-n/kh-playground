@@ -363,7 +363,7 @@ TEST(EntryTest, UpdateProven_Amount) {
   entry.Init(0x264, HAND_ZERO);
   entry.UpdateUnknown(264, 26, 4, amount1);
   entry.UpdateProven(MateLen{334}, amount2);
-  EXPECT_EQ(entry.Amount(), amount2 + kFinalAmountBonus);
+  EXPECT_EQ(entry.Amount(), amount2 + 334 * kFinalAmountBonus);
 }
 
 TEST(EntryTest, UpdateDisproven_Amount) {
@@ -373,7 +373,7 @@ TEST(EntryTest, UpdateDisproven_Amount) {
   entry.Init(0x264, HAND_ZERO);
   entry.UpdateUnknown(264, 26, 4, amount1);
   entry.UpdateDisproven(MateLen{334}, amount2);
-  EXPECT_EQ(entry.Amount(), amount2 + kFinalAmountBonus);
+  EXPECT_EQ(entry.Amount(), amount2 + 334 * kFinalAmountBonus);
 }
 
 TEST(EntryTest, UpdateFinalRange_Superior) {
