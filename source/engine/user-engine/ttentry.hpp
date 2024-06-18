@@ -236,6 +236,8 @@ class alignas(32) Entry {
   Hand GetHand() const noexcept { return hand_.load(std::memory_order_relaxed); }
   /// 盤面ハッシュ値（コンパクション用）
   Key BoardKey() const noexcept { return board_key_; }
+  /// 保存されている局面が先手の局面かどうか判定する
+  bool IsBlack() const noexcept { return (board_key_ & Key{1}) == 0; }
 
   /// 探索量を小さくする。ただし 0 以下にはならない。
   void CutAmount() noexcept { amount_ = std::max<SearchAmount>(amount_ / 2, 1); }
