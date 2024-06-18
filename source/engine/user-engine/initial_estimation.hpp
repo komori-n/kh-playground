@@ -149,13 +149,6 @@ inline std::pair<PnDn, PnDn> InitialPnDnPlusAndNode(const Position& n, Move move
 }
 }  // namespace detail
 
-#if defined(USE_DEEP_DFPN)
-/// deep df-pn のテーブルを初期化する。
-void DeepDfpnInit(Depth d, double e);
-/// 深さ depth のみ探索ノードの pn, dn の初期値を返す
-PnDn InitialDeepPnDn(Depth depth);
-#endif
-
 /**
  * @brief 初めて訪れた局面の pn/dn 初期値を計算する
  * @param n     現局面
@@ -166,7 +159,6 @@ PnDn InitialDeepPnDn(Depth depth);
  * 詰みやすさ／詰み逃れやすさに応じて増減させることで探索性能を向上させられる。
  */
 inline std::pair<PnDn, PnDn> InitialPnDn(const Node& n, Move move) {
-#if !defined(USE_DEEP_DFPN)
   // df-pn+
   // 評価関数の設計は GPS 将棋を参考にした。
   // https://gps.tanaka.ecc.u-tokyo.ac.jp/cgi-bin/viewvc.cgi/trunk/osl/std/osl/checkmate/libertyEstimator.h?view=markup
@@ -177,10 +169,6 @@ inline std::pair<PnDn, PnDn> InitialPnDn(const Node& n, Move move) {
   } else {
     return detail::InitialPnDnPlusAndNode(n.Pos(), move);
   }
-#else   // !defined(USE_DEEP_DFPN)
-  PnDn pndn = InitialDeepPnDn(n.GetDepth());
-  return {pndn, pndn};
-#endif  // !defined(USE_DEEP_DFPN)
 }
 
 /**

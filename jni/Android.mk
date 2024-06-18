@@ -244,7 +244,6 @@ endif
 
 ifeq ($(YANEURAOU_EDITION),USER_ENGINE)
 LOCAL_SRC_FILES += \
-		../source/engine/user-engine/initial_estimation.cpp \
 		../source/engine/user-engine/komoring_heights.cpp \
 		../source/engine/user-engine/user-search.cpp
 endif

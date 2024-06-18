@@ -163,11 +163,6 @@ struct EngineOption {
 
   /// 探索結果を info string で出さない。ベンチマーク用のため `USI::OptionsMap` には登録しない
   bool silent{false};
-
-#if defined(USE_DEEP_DFPN)
-  Depth deep_dfpn_d;   ///< deep df-pn の D 値
-  double deep_dfpn_e;  ///< deep df-pn の E 値
-#endif
   // NOLINTEND(misc-non-private-member-variables-in-classes)
 
   /**
@@ -179,11 +174,6 @@ struct EngineOption {
     o["PvInterval"] << USI::Option(1000, 0, 1000000);
 
     o["RootIsAndNodeIfChecked"] << USI::Option(true);
-
-#if defined(USE_DEEP_DFPN)
-    o["DeepDfpnPerMile"] << USI::Option(5, 0, 10000);
-    o["DeepDfpnMaxVal"] << USI::Option(1000000, 1, INT64_MAX);
-#endif  // defined(USE_DEEP_DFPN)
 
     o["ScoreCalculation"] << USI::Option(detail::score_caluclation_option.Keys(),
                                          detail::score_caluclation_option.DefaultKey());
@@ -207,17 +197,6 @@ struct EngineOption {
     nodes_limit = detail::MakeInfIfNotPositive(detail::ReadOption(o, "NodesLimit"));
     pv_interval = detail::MakeInfIfNotPositive(detail::ReadOption(o, "PvInterval"));
     root_is_and_node_if_checked = (detail::ReadOption(o, "RootIsAndNodeIfChecked") != 0);
-
-#if defined(USE_DEEP_DFPN)
-    if (auto val = detail::ReadOption(o, "DeepDfpnPerMile"); val > 0) {
-      deep_dfpn_e = 0.001 * val + 1.0;
-      const auto max = detail::ReadOption(o, "DeepDfpnMaxVal");
-      deep_dfpn_d = static_cast<Depth>(std::log(static_cast<double>(max)) / std::log(e));
-    } else {
-      deep_dfpn_d = 0;
-      deep_dfpn_e = 1.0;
-    }
-#endif  // defined(USE_DEEP_DFPN)
 
     score_method = detail::score_caluclation_option.Get(detail::ReadOption<std::string>(o, "ScoreCalculation"));
     post_search_level = detail::post_search_level.Get(detail::ReadOption<std::string>(o, "PostSearchLevel"));
