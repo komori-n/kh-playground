@@ -339,6 +339,11 @@ inline bool DoesHaveMatePossibility(const Position& n) {
     }
   }
 
+  if (n.pieces(us, ROOK_DRAGON)) {
+    // 盤面に飛車がある場合は early return
+    return true;
+  }
+
   KOMORI_HAND_LOOP_UNROLL for (PieceType pr = PIECE_HAND_ZERO; pr < PIECE_HAND_NB; ++pr) {
     if (hand_exists(hand, pr)) {
       if (pr == PAWN && (n.pieces(us, PAWN) & file_bb(file_of(king_sq)))) {
@@ -356,12 +361,12 @@ inline bool DoesHaveMatePossibility(const Position& n) {
                   (n.pieces(KNIGHT) & check_candidate_bb(us, KNIGHT, king_sq)) |
                   (n.pieces(SILVER) & check_candidate_bb(us, SILVER, king_sq)) |
                   (n.pieces(GOLDS) & check_candidate_bb(us, GOLD, king_sq)) |
-                  (n.pieces(BISHOP) & check_candidate_bb(us, BISHOP, king_sq)) | (n.pieces(ROOK_DRAGON)) |
+                  (n.pieces(BISHOP) & check_candidate_bb(us, BISHOP, king_sq)) |
                   (n.pieces(HORSE) & check_candidate_bb(us, ROOK, king_sq))) &
                  n.pieces(us);
   const auto y = n.blockers_for_king(them) & n.pieces(us);
 
-  return x | y;
+  return x.pop_count() > 0 || y.pop_count() > 0;
 }
 }  // namespace komori
 
