@@ -216,11 +216,13 @@ inline void RollBack(Node& n, const std::vector<Move>& moves) {
 inline std::pair<Move, Hand> CheckMate1Ply(Node& n) {
   if (!n.Pos().in_check()) {
     if (auto move = Mate::mate_1ply(n.Pos()); move != MOVE_NONE) {
-      n.DoMove(move);
-      auto hand = HandSet{ProofHandTag{}}.Get(n.Pos());
-      n.UndoMove();
+      // mate_1ply が返してくる手は必ず近接王手なので、HandSet{ProofHandTag{}} で証明駒を計算する必要はない
+      Hand hand = HAND_ZERO;
+      if (is_drop(move)) {
+        add_hand(hand, move_dropped_piece(move));
+      }
 
-      return {move, BeforeHand(n.Pos(), move, hand)};
+      return {move, hand};
     }
   }
   return {MOVE_NONE, kNullHand};
