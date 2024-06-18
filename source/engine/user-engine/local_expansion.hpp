@@ -22,20 +22,20 @@
 namespace komori {
 namespace detail {
 /**
- * @brief OR node `n` を `move` した局面が自明な詰み／不詰かどうかを判定する。
- * @param n     現局面
+ * @brief OR node `pos` を `move` した局面が自明な詰み／不詰かどうかを判定する。
+ * @param pos   現局面
  * @param move  次の手
- * @return `n` を `move` で進めた局面が自明な詰みまたは不詰ならその結果を返す。それ以外なら `std::nullopt` を返す。
+ * @return `pos` を `move` で進めた局面が自明な詰みまたは不詰ならその結果を返す。それ以外なら `std::nullopt` を返す。
  *
  * 末端局面における固定深さ探索。詰め探索で必須ではないが、これによって高速化することができる。
  *
  * 高速 1 手詰めルーチンおよび高速 0 手不詰ルーチンにより自明な詰み／不詰を展開することなく検知することができる。
  */
-inline std::optional<SearchResult> CheckObviousFinalOrNode(Node& n) {
-  if (!DoesHaveMatePossibility(n.Pos())) {
-    const auto hand = HandSet{DisproofHandTag{}}.Get(n.Pos());
+inline std::optional<SearchResult> CheckObviousFinalOrNode(const Position& pos) {
+  if (!DoesHaveMatePossibility(pos)) {
+    const auto hand = HandSet{DisproofHandTag{}}.Get(pos);
     return SearchResult::MakeFinal<false>(hand, kDepthMaxMateLen, 1);
-  } else if (auto [best_move, proof_hand] = CheckMate1Ply(n); proof_hand != kNullHand) {
+  } else if (auto [best_move, proof_hand] = CheckMate1Ply(pos); proof_hand != kNullHand) {
     return SearchResult::MakeFinal<true>(proof_hand, MateLen{1}, 1);
   }
   return std::nullopt;
@@ -135,14 +135,18 @@ class LocalExpansion {
           if (lazy_expansion_.HasPrev(i_raw)) {
             should_push = false;
           } else if (!or_node_ && first_search && result.GetUnknownData().is_first_visit) {
+            // ここの1手詰判定が意外と重たいので、少し泥臭く高速化する
             // 1手詰め／1手不詰判定のために、const を一時的に外す
             Node& nn = const_cast<Node&>(n);
-            nn.DoMove(move.move);
-            if (auto res = detail::CheckObviousFinalOrNode(nn); res.has_value()) {
+            // 千日手判定のような複雑なことをする必要がないので、 Node::DoMove() ではなく Position::do_move() を
+            // 直接叩いたほうが僅かに高速に動作する
+            StateInfo si;
+            nn.Pos().do_move(move.move, si);
+            if (auto res = detail::CheckObviousFinalOrNode(nn.Pos()); res.has_value()) {
               result = *res;
               query.SetResult(*res);
             }
-            nn.UndoMove();
+            nn.Pos().undo_move(move.move);
           }
         }
       }

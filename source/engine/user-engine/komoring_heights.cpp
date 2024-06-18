@@ -457,7 +457,7 @@ std::vector<Move> KomoringHeights::GetMatePath(Node& n, MateLen len, bool exact)
   pv_search_ = true;
   while (len.Len() > 0) {
     // 1手詰はTTに書かれていない可能性があるので先にチェックする
-    const auto [move, hand] = CheckMate1Ply(n);
+    const auto [move, hand] = CheckMate1Ply(n.Pos());
     if (move != MOVE_NONE) {
       best_moves.push_back(move);
       n.DoMove(move);

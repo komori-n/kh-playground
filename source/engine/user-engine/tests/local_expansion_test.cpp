@@ -22,7 +22,7 @@ TEST(CheckObviousFinalOrNode, Ambiguous) {
 
   for (const auto& s : tests) {
     TestNode n{s, true};
-    EXPECT_FALSE(CheckObviousFinalOrNode(*n)) << s;
+    EXPECT_FALSE(CheckObviousFinalOrNode(n->Pos())) << s;
   }
 }
 
@@ -36,7 +36,7 @@ TEST(CheckObviousFinalOrNode, MateIn1Ply) {
   for (const auto& [s, h] : tests) {
     TestNode n{s, true};
 
-    auto res = CheckObviousFinalOrNode(*n);
+    auto res = CheckObviousFinalOrNode(n->Pos());
     ASSERT_TRUE(res) << s;
     EXPECT_TRUE(res->IsFinal()) << s;
     EXPECT_EQ(res->Pn(), 0) << s;
@@ -54,7 +54,7 @@ TEST(CheckObviousFinalOrNode, NoMate) {
   for (const auto& s : tests) {
     TestNode n{s, true};
 
-    auto res = CheckObviousFinalOrNode(*n);
+    auto res = CheckObviousFinalOrNode(n->Pos());
     ASSERT_TRUE(res) << s;
     EXPECT_TRUE(res->IsFinal()) << s;
     EXPECT_EQ(res->Dn(), 0) << s;
