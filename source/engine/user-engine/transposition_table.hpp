@@ -121,7 +121,7 @@ class TranspositionTableImpl {
    * `BuildQuery()` と比較して、`n.DoMove()` により局面を動かさなくてもクエリを構築できるため高速に動作する。
    */
   Query BuildChildQuery(const Node& n, Move move) {
-    const auto board_key = n.Pos().board_key_after(move);
+    const auto board_key = n.BoardKeyAfter(move);
     const auto path_key = n.PathKeyAfter(move);
     const auto hand = n.OrHandAfter(move);
     const auto depth = n.GetDepth() + 1;
