@@ -139,9 +139,15 @@ class InlineStack {
   auto begin() { return Iterator<false>(*this, 0); }
   auto begin() const { return Iterator<true>(*this, 0); }
   auto cbegin() const { return Iterator<true>(*this, 0); }
+  friend auto begin(InlineStack& stack) { return stack.begin(); }
+  friend auto begin(const InlineStack& stack) { return stack.begin(); }
+  friend auto cbegin(const InlineStack& stack) { return stack.cbegin(); }
   auto end() { return Iterator<false>(*this, len_); }
   auto end() const { return Iterator<true>(*this, len_); }
   auto cend() const { return Iterator<true>(*this, len_); }
+  friend auto end(InlineStack& stack) { return stack.end(); }
+  friend auto end(const InlineStack& stack) { return stack.end(); }
+  friend auto cend(const InlineStack& stack) { return stack.cend(); }
   T& front() { return *std::launder(reinterpret_cast<T*>(&data_[0].bytes)); }
   const T& front() const { return *std::launder(reinterpret_cast<const T*>(&data_[0].bytes)); }
   T& back() { return *std::launder(reinterpret_cast<T*>(&data_[len_ - 1].bytes)); }
