@@ -9,9 +9,9 @@
 #include <thread>
 #include <utility>
 
-#include "fixed_size_stack.hpp"
 #include "hands.hpp"
 #include "initial_estimation.hpp"
+#include "inline_stack.hpp"
 #include "lazy_expansion_table.hpp"
 #include "move_picker.hpp"
 #include "node.hpp"
@@ -384,7 +384,7 @@ class LocalExpansion {
   /**
    * @brief
    */
-  constexpr void RecalcDelta() {
+  void RecalcDelta() {
     delta_max_ = 0;
     valid_child_num_ = 0;
     for (const auto i_raw : Skip(idx_, excluded_moves_)) {
@@ -557,7 +557,7 @@ class LocalExpansion {
   PnDn valid_child_num_{};  ///< 有効な子（idx_ に入っていて、かつfinalでない子）の数
 
   /// 現在有効な生添字の一覧。「良さ順」で並んでいる。
-  FixedSizeStack<std::uint32_t, kMaxCheckMovesPerNode> idx_;
+  InlineStack<std::uint32_t, kMaxCheckMovesPerNode> idx_;
 
   /// 勝ちになる手を見つけた個数
   /// multi_pv_ == 1 のときは、この値は常に 0 である。multi_pv_ > 1 のとき、勝ち（phi==0）を見つけた後に探索を続ける

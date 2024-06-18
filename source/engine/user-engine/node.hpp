@@ -9,8 +9,8 @@
 #include <vector>
 
 #include "../../mate/mate.h"
-#include "fixed_size_stack.hpp"
 #include "hands.hpp"
+#include "inline_stack.hpp"
 #include "path_keys.hpp"
 #include "typedefs.hpp"
 #include "visit_history.hpp"
@@ -102,7 +102,7 @@ class Node {
     }
   }
   /// 開始局面からの指し手
-  const FixedSizeStack<Move, kDepthMax>& MovesFromStart() const { return moves_; }
+  const InlineStack<Move, kDepthMax>& MovesFromStart() const { return moves_; }
 
   /// `move` 後のハッシュ値
   Key KeyAfter(Move move) const { return Pos().key_after(move); }
@@ -184,12 +184,12 @@ class Node {
 
   /// 現在の局面。move construct 可能にするために生参照ではなく `std::reference_wrapper` で持つ。
   std::reference_wrapper<Position> n_;
-  Color or_color_;                                  ///< OR node（攻め方）の手番
-  Depth depth_{};                                   ///< root から数えた探索深さ
-  VisitHistory visit_history_{};                    ///< 千日手・優等局面の一覧
-  FixedSizeStack<Move, kDepthMax> moves_{};         ///< 開始局面からの指し手
-  FixedSizeStack<StateInfo, kDepthMax> st_info_{};  ///< do_move で必要な一時領域
-  Key path_key_{};                                  ///< 経路ハッシュ値。差分計算により求める。
+  Color or_color_;                               ///< OR node（攻め方）の手番
+  Depth depth_{};                                ///< root から数えた探索深さ
+  VisitHistory visit_history_{};                 ///< 千日手・優等局面の一覧
+  InlineStack<Move, kDepthMax> moves_{};         ///< 開始局面からの指し手
+  InlineStack<StateInfo, kDepthMax> st_info_{};  ///< do_move で必要な一時領域
+  Key path_key_{};                               ///< 経路ハッシュ値。差分計算により求める。
 };
 
 /// 局面 n から moves で手を一気に進める。nに対し、moves の前から順に n.DoMove(m) を適用する。
