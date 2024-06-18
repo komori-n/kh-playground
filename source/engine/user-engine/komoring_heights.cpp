@@ -260,7 +260,7 @@ SearchResult KomoringHeights::SearchEntry(Node& n, MateLen len) {
 
   expansion_list_[tl_thread_id].Emplace(tt_, n, len, true, option_.multi_pv);
   if (tl_thread_id == 0 && n.GetDepth() == 0) {
-    for (const auto& [move, result] : expansion_list_[0].Root().GetAllResults()) {
+    for (const auto& [move, result] : expansion_list_[0].front().GetAllResults()) {
       if (!result.IsFinal()) {
         continue;
       }
@@ -305,7 +305,7 @@ SearchResult KomoringHeights::SearchImplForRoot(Node& n, PnDn thpn, PnDn thdn, M
   const auto orig_thpn = thpn;
   const auto orig_thdn = thdn;
   std::uint32_t inc_flag = 0;
-  auto& local_expansion = expansion_list_[tl_thread_id].Current();
+  auto& local_expansion = expansion_list_[tl_thread_id].back();
 
   if (tl_thread_id == 0 && monitor_.ShouldPrint()) {
     Print(n);
@@ -323,7 +323,8 @@ SearchResult KomoringHeights::SearchImplForRoot(Node& n, PnDn thpn, PnDn thdn, M
     const auto [child_thpn, child_thdn] = local_expansion.FrontPnDnThresholds(thpn, thdn);
 
     n.DoMove(best_move);
-    auto& child_expansion = expansion_list_[tl_thread_id].Emplace(tt_, n, len - 1, is_first_search);
+    expansion_list_[tl_thread_id].Emplace(tt_, n, len - 1, is_first_search);
+    auto& child_expansion = expansion_list_[tl_thread_id].back();
 
     SearchResult child_result;
     if (is_first_search) {
@@ -366,7 +367,7 @@ SearchResult KomoringHeights::SearchImpl(Node& n, PnDn thpn, PnDn thdn, MateLen 
   const PnDn orig_thdn = thdn;
   const std::uint32_t orig_inc_flag = inc_flag;
 
-  auto& local_expansion = expansion_list_[tl_thread_id].Current();
+  auto& local_expansion = expansion_list_[tl_thread_id].back();
   monitor_.Visit(n.GetDepth());
   if (tl_thread_id == 0 && monitor_.ShouldPrint()) {
     Print(n);
@@ -405,7 +406,8 @@ SearchResult KomoringHeights::SearchImpl(Node& n, PnDn thpn, PnDn thdn, MateLen 
     n.DoMove(best_move);
 
     // 子局面を展開する。展開した expansion は UndoMove() の直前に忘れずに開放しなければならない。
-    auto& child_expansion = expansion_list_[tl_thread_id].Emplace(tt_, n, len - 1, is_first_search);
+    expansion_list_[tl_thread_id].Emplace(tt_, n, len - 1, is_first_search);
+    auto& child_expansion = expansion_list_[tl_thread_id].back();
 
     SearchResult child_result;
     if (is_first_search) {
@@ -489,7 +491,8 @@ std::pair<Move, MateLen> KomoringHeights::GetBestMoveOrNode(Node& n, MateLen len
     }
   }
 
-  auto& expansion = expansion_list_[tl_thread_id].Emplace(tt_, n, len, true, option_.multi_pv);
+  expansion_list_[tl_thread_id].Emplace(tt_, n, len, true, option_.multi_pv);
+  auto& expansion = expansion_list_[tl_thread_id].back();
   std::uint32_t inc_flag = 0;
   SearchImpl(n, kInfinitePnDn, kInfinitePnDn, len, inc_flag);
   // exclude を無視して最善手を取りたいので、expansion.BestMove() は使えないので注意。
@@ -508,7 +511,8 @@ std::pair<Move, MateLen> KomoringHeights::GetBestMoveOrNode(Node& n, MateLen len
 std::pair<Move, MateLen> KomoringHeights::GetBestMoveAndNode(Node& n, MateLen len, bool exact) {
   KOMORI_PRECONDITION(!n.IsOrNode());
   if (exact) {
-    auto& expansion = expansion_list_[tl_thread_id].Emplace(tt_, n, len - 2, true, option_.multi_pv);
+    expansion_list_[tl_thread_id].Emplace(tt_, n, len - 2, true, option_.multi_pv);
+    auto& expansion = expansion_list_[tl_thread_id].back();
     std::uint32_t inc_flag = 0;
     SearchImpl(n, kInfinitePnDn, kInfinitePnDn, len - 2, inc_flag);
     // exclude を無視して最善手を取りたいので、expansion.BestMove() は使えないので注意。
@@ -527,7 +531,8 @@ std::pair<Move, MateLen> KomoringHeights::GetBestMoveAndNode(Node& n, MateLen le
       return {move, proven_len};
     }
 
-    auto& expansion = expansion_list_[tl_thread_id].Emplace(tt_, n, len, true, option_.multi_pv);
+    expansion_list_[tl_thread_id].Emplace(tt_, n, len, true, option_.multi_pv);
+    auto& expansion = expansion_list_[tl_thread_id].back();
     std::uint32_t inc_flag = 0;
     SearchImpl(n, kInfinitePnDn, kInfinitePnDn, len, inc_flag);
     // exclude を無視して最善手を取りたいので、expansion.BestMove() は使えないので注意。
@@ -582,9 +587,9 @@ void KomoringHeights::Print(const Node& n) {
   }
 
   auto usi_output = CurrentInfo();
-  if (!expansion_list_[0].IsEmpty() && !pv_search_) {
+  if (!expansion_list_[0].empty() && !pv_search_) {
     // 探索中なら現在の探索情報で pv_list_ を更新する
-    const auto& root = expansion_list_[0].Root();
+    const auto& root = expansion_list_[0].front();
     const auto result = root.FrontResult();
     const auto& moves_from_start = n.MovesFromStart();
     std::vector<Move> best_moves(moves_from_start.begin(), moves_from_start.end());
