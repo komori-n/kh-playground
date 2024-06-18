@@ -172,6 +172,16 @@ inline std::pair<PnDn, PnDn> InitialPnDn(const Node& n, Move move) {
 }
 
 /**
+ * @brief 初期評価値を計算する関数を作成する
+ * @param n 現局面
+ * @param move 次の手
+ * @return 関数オブジェクト。寿命は `n` と同じ。
+ */
+inline auto MakeInitialEvaluationFunc(const Node& n, Move move) {
+  return [&n, move]() { return InitialPnDn(n, move); };
+}
+
+/**
  * @brief 局面 n の手 move に対するざっくりとした評価値を返す。
  *
  * 値が小さければ小さいほど（手番側にとって）良い手を表す。

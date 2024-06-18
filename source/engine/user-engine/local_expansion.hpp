@@ -129,8 +129,7 @@ class LocalExpansion {
         }
 
         query = tt.BuildChildQuery(n, move.move);
-        result =
-            query.LookUp(does_have_old_child_, len - 1, [&n, &move = move]() { return InitialPnDn(n, move.move); });
+        result = query.LookUp(does_have_old_child_, len - 1, MakeInitialEvaluationFunc(n, move));
 
         if (!result.IsFinal()) {
           if (lazy_expansion_.HasPrev(i_raw)) {
