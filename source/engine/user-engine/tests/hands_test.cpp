@@ -129,19 +129,3 @@ TEST(HandsTest, AddIfHandGivesOtherEvasions) {
   EXPECT_FALSE(hand_exists(h3, PAWN));
   EXPECT_FALSE(hand_exists(h3, LANCE));
 }
-
-TEST(HandsTest, SplittedHandMergeByMax) {
-  komori::SplittedHand hand = komori::SplittedHand::Zero();
-  const Hand rhs = MakeHand<PAWN, LANCE, LANCE, SILVER, GOLD, BISHOP, ROOK>();
-
-  hand.MergeByMax(rhs);
-  EXPECT_EQ(hand.ToHand(), rhs);
-}
-
-TEST(HandsTest, SplittedHandMergeByMin) {
-  komori::SplittedHand hand = komori::SplittedHand::Full();
-  const Hand rhs = MakeHand<PAWN, LANCE, LANCE, SILVER, GOLD, BISHOP, ROOK>();
-
-  hand.MergeByMin(rhs);
-  EXPECT_EQ(hand.ToHand(), rhs);
-}

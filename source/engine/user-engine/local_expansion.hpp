@@ -16,6 +16,7 @@
 #include "move_picker.hpp"
 #include "node.hpp"
 #include "ranges.hpp"
+#include "splitted_hand.hpp"
 #include "transposition_table.hpp"
 #include "typedefs.hpp"
 
