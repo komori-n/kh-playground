@@ -361,7 +361,7 @@ class LocalExpansion {
   }
 
   /// 2番目の子の phi 値を計算する
-  constexpr PnDn GetSecondPhi() const {
+  PnDn GetSecondPhi() const {
     if (idx_.size() <= excluded_moves_ + 1) {
       return kInfinitePnDn;
     }
