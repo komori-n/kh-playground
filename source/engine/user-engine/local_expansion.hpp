@@ -117,6 +117,8 @@ class LocalExpansion {
       bool should_push = true;
       auto& result = results_[i_raw];
       auto& query = queries_[i_raw];
+      // 理由はよくわからないが、result の直前に query を作るより、ここで query を作るほうが少しだけ速い
+      query = tt.BuildChildQuery(n, move.move);
 
       if (const auto depth_opt = n.IsRepetitionOrInferiorAfter(move.move)) {
         result = SearchResult::MakeRepetition(hand_after, len, 1, *depth_opt);
@@ -130,7 +132,6 @@ class LocalExpansion {
           goto CHILD_LOOP_END;
         }
 
-        query = tt.BuildChildQuery(n, move.move);
         result = query.LookUp(does_have_old_child_, len - 1, MakeInitialEvaluationFunc(n, move));
 
         if (!result.IsFinal()) {
