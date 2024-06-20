@@ -38,11 +38,6 @@ TEST(HandsTest, CollectHand) {
   EXPECT_EQ(hand_count(hand, ROOK), 2);
 }
 
-TEST(HandsTest, CountHand) {
-  const auto hand = MakeHand<PAWN, PAWN, PAWN, LANCE, LANCE, LANCE, SILVER>();
-  EXPECT_EQ(komori::CountHand(hand), 7);
-}
-
 TEST(HandsTest, AfterHand) {
   TestNode n{"4k4/3l5/3PP4/9/9/9/9/9/9 b L2r2b4g4s4n2l16p 1", true};
 
@@ -135,27 +130,18 @@ TEST(HandsTest, AddIfHandGivesOtherEvasions) {
   EXPECT_FALSE(hand_exists(h3, LANCE));
 }
 
-TEST(HandsTest, HandSet_OrNode) {
-  TestNode n{"8k/9/8P/9/9/9/9/9/9 b NLP2r2b4g4s3n3l16p 1", true};
+TEST(HandsTest, SplittedHandMergeByMax) {
+  komori::SplittedHand hand = komori::SplittedHand::Zero();
+  const Hand rhs = MakeHand<PAWN, LANCE, LANCE, SILVER, GOLD, BISHOP, ROOK>();
 
-  komori::HandSet hand_set{komori::DisproofHandTag{}};
-  hand_set.Update(kFullHand);
-  const auto hand = hand_set.Get(n.Pos());
-  EXPECT_TRUE(hand_exists(hand, PAWN));
-  EXPECT_TRUE(hand_exists(hand, LANCE));
-  EXPECT_TRUE(hand_exists(hand, KNIGHT));
-  EXPECT_FALSE(hand_exists(hand, SILVER));
-  EXPECT_FALSE(hand_exists(hand, GOLD));
-  EXPECT_FALSE(hand_exists(hand, BISHOP));
-  EXPECT_FALSE(hand_exists(hand, ROOK));
+  hand.MergeByMax(rhs);
+  EXPECT_EQ(hand.ToHand(), rhs);
 }
 
-TEST(HandsTest, HandSet_AndNode) {
-  TestNode n{"9/9/9/7l1/nsns3pk/rbng3l1/rbng5/gssg3+P1/8L w 16Pl 1", false};
+TEST(HandsTest, SplittedHandMergeByMin) {
+  komori::SplittedHand hand = komori::SplittedHand::Full();
+  const Hand rhs = MakeHand<PAWN, LANCE, LANCE, SILVER, GOLD, BISHOP, ROOK>();
 
-  komori::HandSet hand_set{komori::ProofHandTag{}};
-  hand_set.Update(HAND_ZERO);
-  const auto hand = hand_set.Get(n.Pos());
-  EXPECT_TRUE(hand_exists(hand, PAWN));
-  EXPECT_FALSE(hand_exists(hand, LANCE));
+  hand.MergeByMin(rhs);
+  EXPECT_EQ(hand.ToHand(), rhs);
 }

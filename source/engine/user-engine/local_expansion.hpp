@@ -33,7 +33,8 @@ namespace detail {
  */
 inline std::optional<SearchResult> CheckObviousFinalOrNode(const Position& pos) {
   if (!DoesHaveMatePossibility(pos)) {
-    const auto hand = HandSet{DisproofHandTag{}}.Get(pos);
+    const Hand curr_hand = static_cast<Hand>(HAND_BIT_MASK);
+    const Hand hand = RemoveIfHandGivesOtherChecks(pos, curr_hand);
     return SearchResult::MakeFinal<false>(hand, kDepthMaxMateLen, 1);
   } else if (auto [best_move, proof_hand] = CheckMate1Ply(pos); proof_hand != kNullHand) {
     return SearchResult::MakeFinal<true>(proof_hand, MateLen{1}, 1);
@@ -445,12 +446,9 @@ class LocalExpansion {
 
   /// 探索結果を取得する（手番側から見て負け局面）
   SearchResult GetLoseResult(const Node& n) const {
-    // amount の総和を取ると値が大きくなりすぎるので子の数だけ足す
-    // なお、子の個数が空の場合があるので注意。
-
     if (or_node_) {
-      // 子局面の反証駒の極大集合を計算する
-      HandSet set{DisproofHandTag{}};
+      SplittedHand splitted_hand = SplittedHand::Full();
+      // 子局面の反証駒の極小集合を計算する
       MateLen mate_len = len_;
       SearchAmount amount = 1;
       for (const auto i_raw : idx_) {
@@ -458,7 +456,7 @@ class LocalExpansion {
         const auto child_move = mp_[i_raw];
         const auto child_disproof_hand = BeforeHand(n.Pos(), child_move, result.GetFinalData().hand);
 
-        set.Update(child_disproof_hand);
+        splitted_hand.MergeByMin(child_disproof_hand);
         amount = std::max(amount, result.Amount());
         if (result.Len() < mate_len) {
           mate_len = result.Len();
@@ -476,17 +474,17 @@ class LocalExpansion {
           }
         }
       }
-      const auto disproof_hand = set.Get(n.Pos());
+      const auto disproof_hand = RemoveIfHandGivesOtherChecks(n.Pos(), splitted_hand.ToHand());
       return SearchResult::MakeFinal<false>(disproof_hand, mate_len + 1, amount);
     } else {
-      // 子局面の証明駒の極小集合を計算する
-      HandSet set{ProofHandTag{}};
+      SplittedHand splitted_hand = SplittedHand::Zero();
+      // 子局面の証明駒の極大集合を計算する
       MateLen mate_len = kMinus1MateLen;
       SearchAmount amount = 1;
       for (const auto i_raw : idx_) {
         const auto& result = results_[i_raw];
 
-        set.Update(result.GetFinalData().hand);
+        splitted_hand.MergeByMax(result.GetFinalData().hand);
         amount = std::max(amount, result.Amount());
         if (result.Len() > mate_len) {
           mate_len = result.Len();
@@ -494,7 +492,7 @@ class LocalExpansion {
       }
       amount += std::max<SearchAmount>(mp_.size(), 1) - 1;
 
-      const auto proof_hand = set.Get(n.Pos());
+      const auto proof_hand = AddIfHandGivesOtherEvasions(n.Pos(), splitted_hand.ToHand());
       return SearchResult::MakeFinal<true>(proof_hand, mate_len + 1, amount);
     }
   }
