@@ -13,7 +13,7 @@
 namespace komori {
 namespace detail {
 /// 駒のざっくりとした価値。スレッドごとに微妙に乱数を加えたいので thread_local にしている。
-thread_local inline int tl_pt_values[] = {0, 0, 53, 74, 136, 123, 23, 119, 52, 26, 87, 12, 32, 96, 85, 110};
+thread_local inline int tl_pt_values[] = {0, 0, 62, 7, 194, 184, 75, 154, 99, 132, 55, 178, 35, 173, 116, 123};
 
 /// df-pn+ で用いるパラメータたち
 struct DfpnPlusParameters {
