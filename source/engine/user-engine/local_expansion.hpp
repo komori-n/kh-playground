@@ -32,14 +32,23 @@ namespace detail {
  *
  * 高速 1 手詰めルーチンおよび高速 0 手不詰ルーチンにより自明な詰み／不詰を展開することなく検知することができる。
  */
-inline std::optional<SearchResult> CheckObviousFinalOrNode(const Position& pos) {
+inline std::optional<SearchResult> CheckObviousFinalAfter(const Position& n, Move move) {
+  // ここの1手詰判定が意外と重たいので、少し泥臭く高速化する
+  auto& pos = const_cast<Position&>(n);
+  StateInfo si;
+  pos.do_move(move, si);
   if (!DoesHaveMatePossibility(pos)) {
     const Hand curr_hand = static_cast<Hand>(HAND_BIT_MASK);
     const Hand hand = RemoveIfHandGivesOtherChecks(pos, curr_hand);
+
+    pos.undo_move(move);
     return SearchResult::MakeFinal<false>(hand, kDepthMaxMateLen, 1);
   } else if (auto [best_move, proof_hand] = CheckMate1Ply(pos); proof_hand != kNullHand) {
+    pos.undo_move(move);
     return SearchResult::MakeFinal<true>(proof_hand, MateLen{1}, 1);
   }
+
+  pos.undo_move(move);
   return std::nullopt;
 }
 }  // namespace detail
@@ -109,57 +118,39 @@ class LocalExpansion {
    * @param len 残り詰み手数
    * @param first_search 初回探索なら `true`。`true` なら高速 1 手詰めルーチンを走らせる。
    * @param multi_pv 勝ちになる手をいくつ見つけるか。1以上でなければならない
-   */ // NOLINTNEXTLINE(readability-function-cognitive-complexity)
+   */
   LocalExpansion(tt::TranspositionTable& tt, const Node& n, MateLen len, bool first_search, std::uint32_t multi_pv = 1)
       : or_node_{n.IsOrNode()}, mp_{n, true}, len_{len}, multi_pv_{multi_pv}, lazy_expansion_{n, mp_} {
+    const MateLen min_len = or_node_ ? MateLen{0} : MateLen{1};
     for (const auto& [i_raw, move] : WithIndex<std::uint32_t>(mp_)) {
-      const auto hand_after = n.OrHandAfter(move.move);
-      bool should_push = true;
-      auto& result = results_[i_raw];
-      auto& query = queries_[i_raw];
       // 理由はよくわからないが、result の直前に query を作るより、ここで query を作るほうが少しだけ速い
-      query = tt.BuildChildQuery(n, move.move);
+      const auto& query = queries_[i_raw] = tt.BuildChildQuery(n, move.move);
+      auto& result = results_[i_raw];
 
-      if (const auto depth_opt = n.IsRepetitionOrInferiorAfter(move.move)) {
-        result = SearchResult::MakeRepetition(hand_after, len, 1, *depth_opt);
+      if (const auto maybe_depth = n.IsRepetitionOrInferiorAfter(move.move)) {
+        result = SearchResult::MakeRepetition(n.OrHandAfter(move.move), len, 1, *maybe_depth);
+      } else if (len_ < min_len + 1) {
+        result = SearchResult::MakeFinal<false>(n.OrHandAfter(move.move), min_len - 1, 1);
       } else {
-        // 子局面が OR node  -> 1手詰以上
-        // 子局面が AND node -> 0手詰以上
-        const auto min_len = or_node_ ? MateLen{0} : MateLen{1};
-        if (len_ < min_len + 1) {
-          // どう見ても詰まない
-          result = SearchResult::MakeFinal<false>(hand_after, min_len - 1, 1);
-          goto CHILD_LOOP_END;
-        }
-
         result = query.LookUp(does_have_old_child_, len - 1, MakeInitialEvaluationFunc(n, move));
 
-        if (!result.IsFinal()) {
-          if (lazy_expansion_.HasPrev(i_raw)) {
-            should_push = false;
-          } else if (!or_node_ && first_search && result.GetUnknownData().is_first_visit) {
-            // ここの1手詰判定が意外と重たいので、少し泥臭く高速化する
-            // 1手詰め／1手不詰判定のために、const を一時的に外す
-            Node& nn = const_cast<Node&>(n);
-            // 千日手判定のような複雑なことをする必要がないので、 Node::DoMove() ではなく Position::do_move() を
-            // 直接叩いたほうが僅かに高速に動作する
-            StateInfo si;
-            nn.Pos().do_move(move.move, si);
-            if (auto res = detail::CheckObviousFinalOrNode(nn.Pos()); res.has_value()) {
-              result = *res;
-              query.SetResult(*res);
-            }
-            nn.Pos().undo_move(move.move);
-          }
+        if (!result.IsFinal() && lazy_expansion_.HasPrev(i_raw)) {
+          // prev がいる non-final な手は、prev が final になるまで探索を後回しにする
+          continue;
         }
       }
 
-    CHILD_LOOP_END:
-      if (should_push) {
-        idx_.Push(i_raw);
-      }
-
-      if (result.IsFinal()) {
+      idx_.Push(i_raw);
+      if (!result.IsFinal()) {
+        if (!or_node_ && first_search && result.GetUnknownData().is_first_visit) {
+          if (const auto maybe_res = detail::CheckObviousFinalAfter(n.Pos(), move.move)) {
+            query.SetResult(*maybe_res);
+            result = *maybe_res;
+            goto FOUND_FINAL;
+          }
+        }
+      } else {
+      FOUND_FINAL:
         lazy_expansion_.Remove(i_raw);
         if (result.Phi(or_node_) == 0) {
           if (excluded_moves_ >= multi_pv_ - 1) {

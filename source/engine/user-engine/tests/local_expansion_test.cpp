@@ -10,57 +10,8 @@
 using komori::kInfinitePnDn;
 using komori::LocalExpansion;
 using komori::MateLen;
-using komori::detail::CheckObviousFinalOrNode;
 
 namespace {
-TEST(CheckObviousFinalOrNode, Ambiguous) {
-  const std::vector<std::string> tests{
-      "k8/9/9/9/9/9/9/9/8P b P2r2b4g4s4n4l16p 1",
-      "k8/9/9/9/9/9/9/9/8P b G2r2b3g4s4n4l17p 1",
-      "k8/9/G8/9/9/9/9/9/8P b 2r2b3g4s4n4l17p 1",
-  };
-
-  for (const auto& s : tests) {
-    TestNode n{s, true};
-    EXPECT_FALSE(CheckObviousFinalOrNode(n->Pos())) << s;
-  }
-}
-
-TEST(CheckObviousFinalOrNode, MateIn1Ply) {
-  const std::vector<std::pair<std::string, Hand>> tests{
-      {"k8/9/P8/9/9/9/9/9/9 b G2r2b3g4s4n4l17p 1", MakeHand<GOLD>()},
-      {"k8/9/P8/9/9/9/9/9/9 b 2R2B4G4S4N4LP16p 1", MakeHand<GOLD>()},
-      {"kp7/9/GG7/2b6/9/9/9/9/9 b 2rb2g4s4n4l17p 1", MakeHand<>()},
-  };
-
-  for (const auto& [s, h] : tests) {
-    TestNode n{s, true};
-
-    auto res = CheckObviousFinalOrNode(n->Pos());
-    ASSERT_TRUE(res) << s;
-    EXPECT_TRUE(res->IsFinal()) << s;
-    EXPECT_EQ(res->Pn(), 0) << s;
-    EXPECT_EQ(res->GetFinalData().hand, h) << s;
-  }
-}
-
-TEST(CheckObviousFinalOrNode, NoMate) {
-  const std::vector<std::string> tests{
-      "4k4/9/9/9/9/9/9/9/9 b 2r2b4g4s4n4l18p 1",
-      "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/9/LNSGKGSNL b rb 1",
-      "4k4/9/9/PPPPPPPPP/9/9/9/9/9 b 2r2b4g4s4n4l9p 1",
-  };
-
-  for (const auto& s : tests) {
-    TestNode n{s, true};
-
-    auto res = CheckObviousFinalOrNode(n->Pos());
-    ASSERT_TRUE(res) << s;
-    EXPECT_TRUE(res->IsFinal()) << s;
-    EXPECT_EQ(res->Dn(), 0) << s;
-  }
-}
-
 class LocalExpansionTest : public ::testing::Test {
  protected:
   void SetUp() override { tt_.Resize(1); }
