@@ -120,7 +120,7 @@ TEST_F(RegularTableTest, CollectGarbage) {
   komori::SearchAmount i = 1;
   for (auto&& entry : tt_) {
     entry.Init(0x334, HAND_ZERO);
-    entry.UpdateUnknown(0, 3, 3, i++, komori::BitSet64::Full(), 334, HAND_ZERO);
+    entry.UpdateUnknown(0, 3, 3, i++);
   }
 
   EXPECT_EQ(tt_.CalculateHashRate(), 1.0);
@@ -145,12 +145,10 @@ TEST_F(RegularTableTest, SaveLoad) {
 
   auto p1 = tt_.PointerOf(board_key1);
   p1->Init(board_key1, hand1);
-  p1->UpdateUnknown(334, 1, 1, komori::tt::detail::kTTSaveAmountThreshold + 1, komori::BitSet64::Full(), 0x334,
-                    HAND_ZERO);
+  p1->UpdateUnknown(334, 1, 1, komori::tt::detail::kTTSaveAmountThreshold + 1);
   auto p2 = tt_.PointerOf(board_key2);
   p2->Init(board_key2, hand2);
-  p2->UpdateUnknown(334, 1, 1, komori::tt::detail::kTTSaveAmountThreshold - 1, komori::BitSet64::Full(), 0x334,
-                    HAND_ZERO);
+  p2->UpdateUnknown(334, 1, 1, komori::tt::detail::kTTSaveAmountThreshold - 1);
   ASSERT_NE(&*p1, &*p2);
 
   std::stringstream ss;

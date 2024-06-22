@@ -7,8 +7,6 @@
 #include <atomic>
 #include <cstdint>
 
-#include "bitset.hpp"
-#include "hands.hpp"
 #include "mate_len.hpp"
 #include "shared_exclusive_lock.hpp"
 #include "typedefs.hpp"
@@ -16,7 +14,7 @@
 namespace komori::tt {
 namespace detail {
 /// 詰み／不詰の探索量のボーナス。これを大きくすることで詰み／不詰エントリが消されづらくなる。
-constexpr inline SearchAmount kFinalAmountBonus{1000};
+constexpr inline SearchAmount kFinalAmountBonus{100};
 }  // namespace detail
 
 /**
@@ -27,32 +25,22 @@ constexpr inline SearchAmount kFinalAmountBonus{1000};
  * 実行速度を高めるために可読性や保守性を犠牲にして1クラスに機能を詰め込んでいる。置換表の Look Up は詰将棋探索において
  * 最もよく使う機能であるため、泥臭く高速化することで全体の性能向上につながる。
  *
- * また、実行速度向上と置換表サイズの節約のために 64 バイトに収まるようにデータを詰め込む。
- *
  * ## 実装詳細
  *
  * 他のクラスよりも可読性を犠牲にしているため、普段よりも仕様を詳細に記す。
  *
- * `Entry` は以下のように 64 bytes で構成されている。キャッシュで悪さをさせないように、64 バイトにアラインさせる。
+ * `Entry` は以下のように 40 bytes で構成されている。
  *
  * ```
  *                       1      2      3      4      5      6      7      8
- * alignas(64)->      +------+------+------+------+------+------+------+------+
+ *                    +------+------+------+------+------+------+------+------+
  *                  0 |           hand_           |          amount_          |
  *                    +------+------+------+------+------+------+------+------+
  *                  8 |                      board_key_                       |
  *                    +------+------+------+------+------+------+------+------+
  *                 16 |        proven_len_        |       disproven_len_      |
  *                    +------+------+------+------+------+------+------+------+
- *                 24 |                          pn_                          |
- *                    +------+------+------+------+------+------+------+------+
- *                 32 |                          dn_                          |
- *                    +------+------+------+------+------+------+------+------+
- *                 40 | lock | rep  | min_depth_  |        parent_hand_       |
- *                    +------+------+------+------+------+------+------+------+
- *                 48 |                  parent_board_key_                    |
- *                    +------+------+------+------+------+------+------+------+
- *                 56 |                       sum_mask_                       |
+ *                 24 |     pn_     |     dn_     | lock | rep  | min_depth_  |
  *                    +------+------+------+------+------+------+------+------+
  * ```
  *
@@ -142,23 +130,15 @@ constexpr inline SearchAmount kFinalAmountBonus{1000};
  *
  * また、詰み／不詰局面は他の局面よりも大事なのでなるべく消されづらくしたい。そのため、探索量に
  * 定数（kFinalAmountBonus）を足して実際の探索量よりも大きくなるようにしている。
- *
- * ### SumMask
- *
- * 詰将棋探索では、pn/dn の二重カウントによる発散を防ぐために、δ値の和を取るべき箇所を max で代用したい場面がある。
- * SumMask は、現局面の子ノードのうちδ値を和で計算すべき子の集合を表す。この値は UpdateExact() で更新される。
- *
- * SumMask のデフォルト値は `BitSet64::Full()` である。すなわち、初期状態はすべての子のδ値を和で計算する。
- * この値は探索部に依存する値なので、このファイル内で初期化を行っているのは本当は良くない。
  */
-class alignas(64) Entry {
+class alignas(32) Entry {
  public:
   /// Default constructor(default)
   Entry() noexcept = default;
   /**
    * @brief Copy constructor
    *
-   * Atomic 変数と mutex はコピー負荷なので、明示的にコピーコンストラクタを定義する。
+   * Atomic 変数と mutex はコピー不可なので、明示的にコピーコンストラクタを定義する。
    */
   Entry(const Entry& entry) noexcept
       : hand_{entry.hand_.load(std::memory_order_relaxed)},
@@ -169,14 +149,11 @@ class alignas(64) Entry {
         pn_{entry.pn_},
         dn_{entry.dn_},
         repetition_state_{entry.repetition_state_},
-        min_depth_{entry.min_depth_.load(std::memory_order_relaxed)},
-        parent_hand_{entry.parent_hand_},
-        parent_board_key_{entry.parent_board_key_},
-        sum_mask_{entry.sum_mask_} {}
+        min_depth_{entry.min_depth_.load(std::memory_order_relaxed)} {}
   /**
    * @brief Copy assign operator
    *
-   * コンパクションで使用する。Atomic 変数と mutex はコピー負荷なので、明示的にコピーコンストラクタを定義する。
+   * コンパクションで使用する。Atomic 変数と mutex はコピー不可なので、明示的にコピーコンストラクタを定義する。
    */
   Entry& operator=(const Entry& entry) noexcept {
     hand_.store(entry.hand_.load(std::memory_order_relaxed), std::memory_order_relaxed);
@@ -188,9 +165,6 @@ class alignas(64) Entry {
     dn_ = entry.dn_;
     repetition_state_ = entry.repetition_state_;
     min_depth_.store(entry.min_depth_.load(std::memory_order_relaxed), std::memory_order_relaxed);
-    parent_hand_ = entry.parent_hand_;
-    parent_board_key_ = entry.parent_board_key_;
-    sum_mask_ = entry.sum_mask_;
 
     return *this;
   }
@@ -213,10 +187,6 @@ class alignas(64) Entry {
     dn_ = 1;
     repetition_state_ = RepetitionState::kNone;
     min_depth_.store(static_cast<std::int16_t>(kDepthMax), std::memory_order_relaxed);
-
-    parent_hand_ = kNullHand;
-    parent_board_key_ = kNullKey;
-    sum_mask_ = BitSet64::Full();
   }
 
   /// エントリの排他ロックを取る
@@ -264,14 +234,10 @@ class alignas(64) Entry {
   SearchAmount Amount() const noexcept { return amount_; }
   /// 現局面の持ち駒
   Hand GetHand() const noexcept { return hand_.load(std::memory_order_relaxed); }
-  /// 親局面の盤面ハッシュ値
-  Key GetParentBoardKey() const noexcept { return parent_board_key_; }
-  /// 親局面の持ち駒
-  Hand GetParentHand() const noexcept { return parent_hand_; }
-  /// δ値を和で計算すべき子の集合
-  BitSet64 SumMask() const noexcept { return sum_mask_; }
   /// 盤面ハッシュ値（コンパクション用）
   Key BoardKey() const noexcept { return board_key_; }
+  /// 保存されている局面が先手の局面かどうか判定する
+  bool IsBlack() const noexcept { return (board_key_ & Key{1}) == 0; }
 
   /// 探索量を小さくする。ただし 0 以下にはならない。
   void CutAmount() noexcept { amount_ = std::max<SearchAmount>(amount_ / 2, 1); }
@@ -298,25 +264,13 @@ class alignas(64) Entry {
    * @param pn     pn
    * @param dn     dn
    * @param amount 探索量
-   * @param sum_mask δ値を和で計算する子の集合
-   * @param parent_board_key 親局面の盤面ハッシュ値
-   * @param parent_hand 親局面の攻め方の持ち駒
    * @pre `IsFor(board_key, hand)` （`board_key`, `hand` は現局面の盤面ハッシュ、持ち駒）
    */
-  void UpdateUnknown(Depth depth,
-                     PnDn pn,
-                     PnDn dn,
-                     SearchAmount amount,
-                     BitSet64 sum_mask,
-                     Key parent_board_key,
-                     Hand parent_hand) noexcept {
+  void UpdateUnknown(Depth depth, PnDn pn, PnDn dn, SearchAmount amount) noexcept {
     const auto depth16 = static_cast<std::int16_t>(depth);
     min_depth_.store(std::min(min_depth_.load(std::memory_order_relaxed), depth16), std::memory_order_relaxed);
     pn_ = pn;
     dn_ = dn;
-    parent_board_key_ = parent_board_key;
-    parent_hand_ = parent_hand;
-    sum_mask_ = sum_mask;
     amount_ = std::max(amount_, amount);
   }
 
@@ -330,7 +284,7 @@ class alignas(64) Entry {
   void UpdateProven(MateLen len, SearchAmount amount) noexcept {
     KOMORI_PRECONDITION(disproven_len_ < len);
     proven_len_ = std::min(proven_len_, len);
-    amount_ = std::max(amount_, SaturatedAdd(amount, detail::kFinalAmountBonus));
+    amount_ = std::max(amount_, SaturatedAdd(amount, len.Len() * detail::kFinalAmountBonus));
   }
 
   /**
@@ -343,7 +297,7 @@ class alignas(64) Entry {
   void UpdateDisproven(MateLen len, SearchAmount amount) noexcept {
     KOMORI_PRECONDITION(len < proven_len_);
     disproven_len_ = std::max(disproven_len_, len);
-    amount_ = std::max(amount_, SaturatedAdd(amount, detail::kFinalAmountBonus));
+    amount_ = std::max(amount_, SaturatedAdd(amount, len.Len() * detail::kFinalAmountBonus));
   }
 
   /**
@@ -399,36 +353,6 @@ class alignas(64) Entry {
 
     // 優等でも劣等でもない局面。何もせずに返る
     return false;
-  }
-
-  /**
-   * @brief `hand` に対応する親局面を取得する
-   * @param hand 現局面の持ち駒
-   * @param pn pn
-   * @param dn dn
-   * @param parent_board_key 親局面の盤面ハッシュ値
-   * @param parent_hand 親局面の持ち駒
-   */
-  void UpdateParentCandidate(Hand hand, PnDn& pn, PnDn& dn, Key& parent_board_key, Hand& parent_hand) const {
-    const Hand entry_hand = hand_.load(std::memory_order_relaxed);
-    const bool is_inferior = hand_is_equal_or_superior(entry_hand, hand);
-    const bool is_superior = hand_is_equal_or_superior(hand, entry_hand);
-
-    if (is_inferior && pn_ > pn) {
-      pn = pn_;
-      if (parent_hand_ != kNullHand && (parent_hand == kNullHand || pn > dn)) {
-        parent_board_key = parent_board_key_;
-        parent_hand = ApplyDeltaHand(parent_hand_, entry_hand, hand);
-      }
-    }
-
-    if (is_superior && dn_ > dn) {
-      dn = dn_;
-      if (parent_hand_ != kNullHand && (parent_hand == kNullHand || dn > pn)) {
-        parent_board_key = parent_board_key_;
-        parent_hand = ApplyDeltaHand(parent_hand_, entry_hand, hand);
-      }
-    }
   }
 
   /**
@@ -591,15 +515,10 @@ class alignas(64) Entry {
   RepetitionState repetition_state_;               ///< 現局面が千日手の可能性があるか
   /// 最小探索深さ。`LookUp()` 中に書き換える可能性があるので atomic かつ mutable。
   mutable std::atomic<std::int16_t> min_depth_;
-
-  Hand parent_hand_;      ///< 親局面の持ち駒
-  Key parent_board_key_;  ///< 親局面の盤面ハッシュ値
-  BitSet64 sum_mask_{};   ///< δ値を和で計算する子の集合
 };
 
 static_assert(sizeof(SearchAmount) == 4, "The size of SearchAmount must be 4.");
 static_assert(sizeof(Entry) <= 64, "The size of `Entry` must be less than or equal to 64 bytes.");
-static_assert(alignof(Entry) == 64, "`Entry` must be aligned as 64 bytes.");
 static_assert(std::is_default_constructible<Entry>(), "`Entry` must be default constructible");
 }  // namespace komori::tt
 

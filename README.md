@@ -8,8 +8,8 @@
 
 [English](README.en.md)
 
-KomoringHeights は、df-pn+アルゴリズムを用いた[やねうら王](https://github.com/yaneurao/YaneuraOu/)ベースの詰将棋エンジンです。
-局面の優劣関係、厳密な千日手検出、局面の合流検出と二重カウント回避など、詰将棋特有の探索技法が実装されており、
+KomoringHeights は、DF-WPN（Depth-First Weak Proof-Number）アルゴリズムを用いた[やねうら王](https://github.com/yaneurao/YaneuraOu/)ベースの詰将棋エンジンです。
+局面の優劣関係、厳密な千日手検出など、詰将棋特有の探索技法が実装されており、
 詰み／不詰の判定を高速に行うことができます。
 
 KomoringHeights 本体は `source/engine/user-engine` 以下に格納されています。
@@ -52,11 +52,6 @@ GCC 11、Clang 14 より新しいコンパイラのみ動作確認をしてい�
 Doxygenから自動生成したドキュメントは以下を参照してください。
 
 - <https://komori-n.github.io/komoring-heights-docs/index.html>
-
-## Contributing
-
-バグの報告や機能要望などはIssueへお願いします。
-Pull Requestも大歓迎です。Pull Requestを作成する場合、事前に `.pre-commit-config.yaml` の pre-commit チェックが通ることを確認してください。
 
 ## ライセンス
 

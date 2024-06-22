@@ -724,158 +724,18 @@ namespace Mate {
 
 		// 相手玉側のpinされている駒の列挙(相手玉側は、この駒を動かすと素抜きに遭う)
 		Bitboard pinned = pos.blockers_for_king<Them>() & pos.pieces<Them>();
-	
+
 		Square from, to;
 
-		// -- 駒打ちによる即詰み
-
-		// 駒が打てる場所
-		Bitboard bb_drop = ~pos.pieces();
+		// komori-n: 元のやねうら王のコードでは、駒打ち -> 非駒打ちの順で探索していた。本将棋では駒打ちを先に探索することで
+		// 詰みを早期に見つけられる可能性が高まるためだと考えられる。しかし、詰将棋探索的には、証明駒を少なくできる分、
+		// 駒を打たずに詰むなら打たない方が良い。そのため、探索順序を 非駒打ち -> 駒打ち に変更している。
 
 		// テンポラリ用
 		Bitboard bb;
 
 		// 攻撃範囲計算用
 		Bitboard bb_attacks;
-
-		Hand ourHand  = pos.hand_of<Us  >();
-		// Hand themHand = pos.hand_of<Them>();
-
-		// 飛車を短く打つ場合
-		if (hand_count(ourHand, ROOK))
-		{
-			// 敵玉の上下左右の駒の打てる場所
-			bb = rookStepEffect(sq_king) & kingEffect(sq_king) & bb_drop;
-
-			while (bb)
-			{
-				to = bb.pop();
-				// toに対して自駒が利いてないと意味ない
-				if (!pos.attackers_to<Us>(to))
-					continue;
-
-				// このtoに飛車を打つものとして…この十字方向には逃げられないわけだから…そこは駄目ですよ、と。
-				bb_attacks = rookStepEffect(to);
-
-				if (can_king_escape  <Them>(pos, to, bb_attacks, pos.pieces())) { continue; }
-				if (can_piece_capture<Them>(pos, to, pinned    , pos.pieces())) { continue; }
-				return make_move_drop(ROOK, to , Us);
-			}
-		}
-
-		// 香を短く打つ場合
-		if (hand_count(ourHand, LANCE))
-		{
-			bb = pawnEffect<Them>(sq_king) & bb_drop;
-			if (bb)
-			{
-				to = bb.pop();
-				if (pos.attackers_to<Us>(to))
-				{
-					bb_attacks = lanceStepEffect<Us>(to);
-					if (can_king_escape  <Them>(pos, to, bb_attacks, pos.pieces())) { goto SKIP_LANCE; }
-					if (can_piece_capture<Them>(pos, to, pinned    , pos.pieces())) { goto SKIP_LANCE; }
-					return make_move_drop(LANCE, to, Us);
-
-				SKIP_LANCE:;
-				}
-			}
-		}
-
-		// 角を短く打つ
-		if (hand_count(ourHand, BISHOP))
-		{
-			// 敵玉の上下左右の駒の打てる場所
-			bb = cross45StepEffect(sq_king) & bb_drop;
-
-			while (bb)
-			{
-				to = bb.pop();
-				// toに対して自駒が利いてないと意味ない
-				if (!pos.attackers_to<Us>(to))
-					continue;
-
-				// このtoに角を打つものとして…この斜め方向には逃げられないわけだから…そこは駄目ですよ、と。
-				bb_attacks = bishopStepEffect(to);
-
-				if (can_king_escape  <Them>(pos, to, bb_attacks, pos.pieces())) { continue; }
-				if (can_piece_capture<Them>(pos, to, pinned    , pos.pieces())) { continue; }
-				return make_move_drop(BISHOP, to , Us);
-			}
-		}
-
-		// 金打ち
-		if (hand_count(ourHand, GOLD))
-		{
-			bb = goldEffect(Them, sq_king) & bb_drop;
-
-			// 飛車を持っているならすでに調べた上の升は除外して良い。
-			// (そこに金をおいて詰むなら飛車をおいて詰んでいるはずだから)
-			if (hand_count(ourHand, ROOK))
-				bb = pawnEffect<Us>(sq_king).andnot(bb);
-
-			while (bb)
-			{
-				to = bb.pop();
-				// toに対して自駒が利いてないと意味ない
-				if (!pos.attackers_to<Us>(to))
-					continue;
-
-				bb_attacks = goldEffect<Us>(to);
-
-				if (can_king_escape  <Them>(pos, to, bb_attacks, pos.pieces())) { continue; }
-				if (can_piece_capture<Them>(pos, to, pinned    , pos.pieces())) { continue; }
-				return make_move_drop(GOLD, to , Us);
-			}
-		}
-		// 銀打ち
-		if (hand_count(ourHand, SILVER))
-		{
-			// 金打ちをすでに調べたのであれば前方向は除外
-			if (hand_count(ourHand, GOLD))
-			{
-				// 角打ちも調べていたのであれば銀で詰むことはない
-				if (hand_count(ourHand, BISHOP))
-					goto SILVER_DROP_END;
-
-				// 前方向を除外するために金のnotを用いる。
-				bb = silverEffect<Them>(sq_king) & goldEffect<Them>(sq_king).andnot(bb_drop);
-			}
-			else {
-				bb = silverEffect<Them>(sq_king) &  bb_drop;
-			}
-			while (bb)
-			{
-				to = bb.pop();
-				// toに対して自駒が利いてないと意味ない
-				if (!pos.attackers_to<Us>(to))
-					continue;
-
-				bb_attacks = silverEffect<Us>(to);
-
-				if (can_king_escape  <Them>(pos, to, bb_attacks, pos.pieces())) { continue; }
-				if (can_piece_capture<Them>(pos, to, pinned    , pos.pieces())) { continue; }
-				return make_move_drop(SILVER, to , Us);
-			}
-		}
-	SILVER_DROP_END:;
-
-		// 桂打ち
-		if (hand_count(ourHand, KNIGHT))
-		{
-			bb = knightEffect<Them>(sq_king) & bb_drop;
-
-			while (bb)
-			{
-				to = bb.pop();
-				//      bb_attacks =knightEffect(Us, to);
-				// 桂馬はto以外は王が1手で移動できない場所なので求めるまでもない。
-
-				if (can_king_escape  <Them>(pos, to, Bitboard(ZERO), pos.pieces())) { continue; }
-				if (can_piece_capture<Them>(pos, to, pinned        , pos.pieces())) { continue; }
-				return make_move_drop(KNIGHT, to , Us);
-			}
-		}
 
 		// -- 移動による1手詰め
 
@@ -2127,6 +1987,149 @@ namespace Mate {
 			}
 		}
 #endif
+
+		// -- 駒打ちによる即詰み
+
+		// 駒が打てる場所
+		Bitboard bb_drop = ~pos.pieces();
+
+		Hand ourHand  = pos.hand_of<Us  >();
+
+		// 飛車を短く打つ場合
+		if (hand_count(ourHand, ROOK))
+		{
+			// 敵玉の上下左右の駒の打てる場所
+			bb = rookStepEffect(sq_king) & kingEffect(sq_king) & bb_drop;
+
+			while (bb)
+			{
+				to = bb.pop();
+				// toに対して自駒が利いてないと意味ない
+				if (!pos.attackers_to<Us>(to))
+					continue;
+
+				// このtoに飛車を打つものとして…この十字方向には逃げられないわけだから…そこは駄目ですよ、と。
+				bb_attacks = rookStepEffect(to);
+
+				if (can_king_escape  <Them>(pos, to, bb_attacks, pos.pieces())) { continue; }
+				if (can_piece_capture<Them>(pos, to, pinned    , pos.pieces())) { continue; }
+				return make_move_drop(ROOK, to , Us);
+			}
+		}
+
+		// 香を短く打つ場合
+		if (hand_count(ourHand, LANCE))
+		{
+			bb = pawnEffect<Them>(sq_king) & bb_drop;
+			if (bb)
+			{
+				to = bb.pop();
+				if (pos.attackers_to<Us>(to))
+				{
+					bb_attacks = lanceStepEffect<Us>(to);
+					if (can_king_escape  <Them>(pos, to, bb_attacks, pos.pieces())) { goto SKIP_LANCE; }
+					if (can_piece_capture<Them>(pos, to, pinned    , pos.pieces())) { goto SKIP_LANCE; }
+					return make_move_drop(LANCE, to, Us);
+
+				SKIP_LANCE:;
+				}
+			}
+		}
+
+		// 角を短く打つ
+		if (hand_count(ourHand, BISHOP))
+		{
+			// 敵玉の上下左右の駒の打てる場所
+			bb = cross45StepEffect(sq_king) & bb_drop;
+
+			while (bb)
+			{
+				to = bb.pop();
+				// toに対して自駒が利いてないと意味ない
+				if (!pos.attackers_to<Us>(to))
+					continue;
+
+				// このtoに角を打つものとして…この斜め方向には逃げられないわけだから…そこは駄目ですよ、と。
+				bb_attacks = bishopStepEffect(to);
+
+				if (can_king_escape  <Them>(pos, to, bb_attacks, pos.pieces())) { continue; }
+				if (can_piece_capture<Them>(pos, to, pinned    , pos.pieces())) { continue; }
+				return make_move_drop(BISHOP, to , Us);
+			}
+		}
+
+		// 金打ち
+		if (hand_count(ourHand, GOLD))
+		{
+			bb = goldEffect(Them, sq_king) & bb_drop;
+
+			// 飛車を持っているならすでに調べた上の升は除外して良い。
+			// (そこに金をおいて詰むなら飛車をおいて詰んでいるはずだから)
+			if (hand_count(ourHand, ROOK))
+				bb = pawnEffect<Us>(sq_king).andnot(bb);
+
+			while (bb)
+			{
+				to = bb.pop();
+				// toに対して自駒が利いてないと意味ない
+				if (!pos.attackers_to<Us>(to))
+					continue;
+
+				bb_attacks = goldEffect<Us>(to);
+
+				if (can_king_escape  <Them>(pos, to, bb_attacks, pos.pieces())) { continue; }
+				if (can_piece_capture<Them>(pos, to, pinned    , pos.pieces())) { continue; }
+				return make_move_drop(GOLD, to , Us);
+			}
+		}
+		// 銀打ち
+		if (hand_count(ourHand, SILVER))
+		{
+			// 金打ちをすでに調べたのであれば前方向は除外
+			if (hand_count(ourHand, GOLD))
+			{
+				// 角打ちも調べていたのであれば銀で詰むことはない
+				if (hand_count(ourHand, BISHOP))
+					goto SILVER_DROP_END;
+
+				// 前方向を除外するために金のnotを用いる。
+				bb = silverEffect<Them>(sq_king) & goldEffect<Them>(sq_king).andnot(bb_drop);
+			}
+			else {
+				bb = silverEffect<Them>(sq_king) &  bb_drop;
+			}
+			while (bb)
+			{
+				to = bb.pop();
+				// toに対して自駒が利いてないと意味ない
+				if (!pos.attackers_to<Us>(to))
+					continue;
+
+				bb_attacks = silverEffect<Us>(to);
+
+				if (can_king_escape  <Them>(pos, to, bb_attacks, pos.pieces())) { continue; }
+				if (can_piece_capture<Them>(pos, to, pinned    , pos.pieces())) { continue; }
+				return make_move_drop(SILVER, to , Us);
+			}
+		}
+	SILVER_DROP_END:;
+
+		// 桂打ち
+		if (hand_count(ourHand, KNIGHT))
+		{
+			bb = knightEffect<Them>(sq_king) & bb_drop;
+
+			while (bb)
+			{
+				to = bb.pop();
+				//      bb_attacks =knightEffect(Us, to);
+				// 桂馬はto以外は王が1手で移動できない場所なので求めるまでもない。
+
+				if (can_king_escape  <Them>(pos, to, Bitboard(ZERO), pos.pieces())) { continue; }
+				if (can_piece_capture<Them>(pos, to, pinned        , pos.pieces())) { continue; }
+				return make_move_drop(KNIGHT, to , Us);
+			}
+		}
 
 		// 持将棋の判定入れておくか…。
 		// どうせ玉が入玉してないときはほとんど判定コストゼロだしな

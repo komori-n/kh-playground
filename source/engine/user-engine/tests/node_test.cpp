@@ -19,15 +19,12 @@ TEST(NodeTest, PositionValues) {
   EXPECT_EQ(n->GetKey(), p.key());
   EXPECT_EQ(n->BoardKey(), p.state()->board_key());
   EXPECT_EQ(n->GetPathKey(), 33);
-  EXPECT_EQ(n->GetBoardKeyHandPair(), (komori::BoardKeyHandPair{p.state()->board_key(), p.hand_of(WHITE)}));
 
   const Move m = make_move_drop(BISHOP, SQ_57, WHITE);
   EXPECT_EQ(n->KeyAfter(m), p.key_after(m));
   EXPECT_EQ(n->BoardKeyAfter(m), p.board_key_after(m));
   EXPECT_EQ(n->PathKeyAfter(m), komori::PathKeyAfter(33, m, 4));
   EXPECT_EQ(n->OrHandAfter(m), komori::AfterHand(p, m, p.hand_of(WHITE)));
-  EXPECT_EQ(n->BoardKeyHandPairAfter(m),
-            (komori::BoardKeyHandPair{p.board_key_after(m), komori::AfterHand(p, m, p.hand_of(WHITE))}));
 }
 
 TEST(NodeTest, IsRootOrNode) {
@@ -147,7 +144,7 @@ TEST(NodeTest, RollForward) {
 TEST(CheckMate1PlyTest, Mate) {
   TestNode n{"4k4/9/4P4/9/9/9/9/9/9 b 2R2B4G4S4N4L17P 1", true};
 
-  const auto [best_move, proof_hand] = komori::CheckMate1Ply(*n);
+  const auto [best_move, proof_hand] = komori::CheckMate1Ply(n->Pos());
   EXPECT_EQ(best_move, make_move_drop(GOLD, SQ_52, BLACK));
   EXPECT_EQ(proof_hand, (MakeHand<GOLD>()));
 }
@@ -155,7 +152,7 @@ TEST(CheckMate1PlyTest, Mate) {
 TEST(CheckMate1PlyTest, InCheck) {
   TestNode n{"4k4/9/4P4/9/9/9/9/9/9 b S2r2b4g3s4n4l17p 1", true};
 
-  const auto [best_move, proof_hand] = komori::CheckMate1Ply(*n);
+  const auto [best_move, proof_hand] = komori::CheckMate1Ply(n->Pos());
   EXPECT_EQ(best_move, MOVE_NONE);
   EXPECT_EQ(proof_hand, komori::kNullHand);
 }
@@ -163,7 +160,7 @@ TEST(CheckMate1PlyTest, InCheck) {
 TEST(CheckMate1PlyTest, NoCheckmate) {
   TestNode n{"4k4/9/4P4/9/9/9/9/4p4/4K4 b G2r2b3g4s4n4l16p 1", true};
 
-  const auto [best_move, proof_hand] = komori::CheckMate1Ply(*n);
+  const auto [best_move, proof_hand] = komori::CheckMate1Ply(n->Pos());
   EXPECT_EQ(best_move, MOVE_NONE);
   EXPECT_EQ(proof_hand, komori::kNullHand);
 }

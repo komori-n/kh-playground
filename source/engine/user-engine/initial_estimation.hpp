@@ -13,9 +13,7 @@
 namespace komori {
 namespace detail {
 /// 駒のざっくりとした価値。スレッドごとに微妙に乱数を加えたいので thread_local にしている。
-thread_local inline int tl_pt_values[] = {
-    0, 10, 20, 20, 30, 50, 50, 50, 80, 50, 50, 50, 50, 80, 80, 80,
-};
+thread_local inline int tl_pt_values[] = {0, 0, 62, 7, 194, 184, 75, 154, 99, 132, 55, 178, 35, 173, 116, 123};
 
 /// df-pn+ で用いるパラメータたち
 struct DfpnPlusParameters {
@@ -56,7 +54,7 @@ inline void InitBriefEvaluation(std::uint32_t thread_id) {
       value += static_cast<int>(dist(mt));
     }
 
-    std::discrete_distribution<PnDn> discrete_dist({0.7, 0.30});
+    std::discrete_distribution<PnDn> discrete_dist({0.8, 0.2});
     // pn_base と dn_base はいじらないほうが強そう
     // detail::kDfpnPlusParameters.or_pn_base += discrete_dist(mt);
     // detail::kDfpnPlusParameters.or_dn_base += discrete_dist(mt);
@@ -151,13 +149,6 @@ inline std::pair<PnDn, PnDn> InitialPnDnPlusAndNode(const Position& n, Move move
 }
 }  // namespace detail
 
-#if defined(USE_DEEP_DFPN)
-/// deep df-pn のテーブルを初期化する。
-void DeepDfpnInit(Depth d, double e);
-/// 深さ depth のみ探索ノードの pn, dn の初期値を返す
-PnDn InitialDeepPnDn(Depth depth);
-#endif
-
 /**
  * @brief 初めて訪れた局面の pn/dn 初期値を計算する
  * @param n     現局面
@@ -168,7 +159,6 @@ PnDn InitialDeepPnDn(Depth depth);
  * 詰みやすさ／詰み逃れやすさに応じて増減させることで探索性能を向上させられる。
  */
 inline std::pair<PnDn, PnDn> InitialPnDn(const Node& n, Move move) {
-#if !defined(USE_DEEP_DFPN)
   // df-pn+
   // 評価関数の設計は GPS 将棋を参考にした。
   // https://gps.tanaka.ecc.u-tokyo.ac.jp/cgi-bin/viewvc.cgi/trunk/osl/std/osl/checkmate/libertyEstimator.h?view=markup
@@ -179,10 +169,16 @@ inline std::pair<PnDn, PnDn> InitialPnDn(const Node& n, Move move) {
   } else {
     return detail::InitialPnDnPlusAndNode(n.Pos(), move);
   }
-#else   // !defined(USE_DEEP_DFPN)
-  PnDn pndn = InitialDeepPnDn(n.GetDepth());
-  return {pndn, pndn};
-#endif  // !defined(USE_DEEP_DFPN)
+}
+
+/**
+ * @brief 初期評価値を計算する関数を作成する
+ * @param n 現局面
+ * @param move 次の手
+ * @return 関数オブジェクト。寿命は `n` と同じ。
+ */
+inline auto MakeInitialEvaluationFunc(const Node& n, Move move) {
+  return [&n, move]() { return InitialPnDn(n, move); };
 }
 
 /**
@@ -210,7 +206,7 @@ inline int MoveBriefEvaluation(const Node& n, Move move) {
 
   auto after_pt = type_of(n.Pos().moved_piece_after(move));
   value -= detail::tl_pt_values[after_pt];
-  value += 10 * dist(king_sq, to);
+  value += dist(king_sq, to) * 20;
 
   return value;
 }

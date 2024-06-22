@@ -5,7 +5,6 @@
 #define KOMORI_THREAD_INITIALIZATION_HPP_
 
 #include "initial_estimation.hpp"
-#include "ttquery.hpp"
 #include "typedefs.hpp"
 
 namespace komori {
@@ -20,7 +19,6 @@ inline void InitializeThread(std::uint32_t id, std::uint32_t num_threads) {
   tl_thread_id = id;
   tl_gc_thread = (id == num_threads - 1);
   InitBriefEvaluation(id);
-  tt::InitializeTTNoise(id);
 }
 }  // namespace komori
 

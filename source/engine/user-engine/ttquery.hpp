@@ -7,7 +7,6 @@
 #include <optional>
 #include <shared_mutex>
 
-#include "board_key_hand_pair.hpp"
 #include "mate_len.hpp"
 #include "regular_table.hpp"
 #include "repetition_table.hpp"
@@ -16,27 +15,6 @@
 #include "typedefs.hpp"
 
 namespace komori::tt {
-namespace detail {
-/// LookUp() 時に加えるノイズの周期。スレッドごとに値を変えることで探索順序がばらつくようにする。
-thread_local inline std::uint32_t tt_noise_interval = std::numeric_limits<std::uint32_t>::max();
-/// 次にノイズを加えるまでの残り LookUp() 回数。この値が 0 になったらノイズを加える。
-// ただし、numeric_limits::max() であれば一生ノイズを加えない。
-thread_local inline std::uint32_t tt_noise_timing = std::numeric_limits<std::uint32_t>::max();
-}  // namespace detail
-
-/**
- * @brief LookUp() のノイズ周期を初期化する
- * @param thread_id スレッド番号
- */
-inline void InitializeTTNoise(std::uint32_t thread_id) {
-  // main thread にはノイズを載せない
-  if (thread_id != 0) {
-    // 各スレッドに少しずつノイズを乗せる。
-    static constexpr std::uint32_t kNoise[8] = {7, 6, 5, 4, 3, 2, 8, 9};
-    detail::tt_noise_interval += kNoise[(thread_id - 1) % 8];
-    detail::tt_noise_timing = thread_id;
-  }
-}
 
 /**
  * @brief 連続する複数エントリを束ねてまとめて読み書きするためのクラス。
@@ -95,9 +73,6 @@ class Query {
   /// Destructor
   ~Query() noexcept = default;
 
-  /// 盤面ハッシュ値と持ち駒のペアを返す
-  constexpr BoardKeyHandPair GetBoardKeyHandPair() const noexcept { return BoardKeyHandPair{board_key_, hand_}; }
-
   // テンプレート関数のカバレッジは悲しいことになるので取らない
   // LCOV_EXCL_START NOLINTBEGIN
 
@@ -121,7 +96,6 @@ class Query {
     SearchAmount amount = 1;
 
     bool found_exact = false;
-    BitSet64 sum_mask = BitSet64::Full();
 
     for (auto itr = initial_entry_pointer_; !itr->IsNull(); ++itr) {
       std::shared_lock lock(*itr);
@@ -143,25 +117,14 @@ class Query {
             }
 
             found_exact = true;
-            sum_mask = itr->SumMask();
             cached_entry_ = &*itr;
           }
         }
       }
     }
 
-    // LookUp() 結果が final でないとき、スレッドごとに決められた周期で pn, dn へノイズを載せる
-    if (detail::tt_noise_timing != std::numeric_limits<std::uint32_t>::max()) {
-      if (detail::tt_noise_timing-- == 0) {
-        detail::tt_noise_timing = detail::tt_noise_interval;
-        // (pn, dn) へノイズを載せる
-        pn++;
-        dn++;
-      }
-    }
-
     if (found_exact) {
-      return SearchResult::MakeUnknown(pn, dn, len, amount, sum_mask);
+      return SearchResult::MakeUnknown(pn, dn, len, amount);
     }
 
     const auto [init_pn, init_dn] = std::forward<InitialEvalFunc>(eval_func)();
@@ -171,31 +134,6 @@ class Query {
     return SearchResult::MakeFirstVisit(pn, dn, len, amount);
   }
   // LCOV_EXCL_STOP NOLINTEND
-
-  /**
-   * @brief 置換表に保存された現局面の親局面を取得する
-   * @param[out] pn 現局面のpn
-   * @param[out] dn 現局面のdn
-   * @return 現局面の親局面
-   */
-  std::optional<BoardKeyHandPair> LookUpParent(PnDn& pn, PnDn& dn) const noexcept {
-    pn = dn = 1;
-
-    Key parent_board_key = kNullKey;
-    Hand parent_hand = kNullHand;
-    for (auto itr = initial_entry_pointer_; !itr->IsNull(); ++itr) {
-      const std::shared_lock lock(*itr);
-      if (itr->IsFor(board_key_)) {
-        itr->UpdateParentCandidate(hand_, pn, dn, parent_board_key, parent_hand);
-      }
-    }
-
-    if (parent_hand == kNullHand) {
-      return std::nullopt;
-    }
-
-    return BoardKeyHandPair{parent_board_key, parent_hand};
-  }
 
   /**
    * @brief 詰み／不詰手数専用の LookUp()
@@ -228,11 +166,9 @@ class Query {
   /**
    * @brief 探索結果 `result` を置換表に書き込む
    * @param result 探索結果
-   * @param parent_key_hand_pair 親局面の盤面ハッシュ値と持ち駒のペア
    * @note 実際の処理は `SetProven()`, `SetDisproven()`, `SetRepetition()`, `SetUnknown()` を参照。
    */
-  void SetResult(const SearchResult& result,
-                 BoardKeyHandPair parent_key_hand_pair = BoardKeyHandPair{kNullKey, kNullHand}) const noexcept {
+  void SetResult(const SearchResult& result) const noexcept {
     if (result.Pn() == 0) {
       SetFinal<true>(result);
     } else if (result.Dn() == 0) {
@@ -242,7 +178,7 @@ class Query {
         SetFinal<false>(result);
       }
     } else {
-      SetUnknown(result, parent_key_hand_pair);
+      SetUnknown(result);
     }
   }
 
@@ -311,15 +247,13 @@ class Query {
    * @brief 探索中の探索結果 `result` を置換表に書き込む関数
    * @param result 探索結果（探索中）
    */
-  void SetUnknown(const SearchResult& result, BoardKeyHandPair parent_key_hand_pair) const noexcept {
+  void SetUnknown(const SearchResult& result) const noexcept {
     const auto pn = result.Pn();
     const auto dn = result.Dn();
     const auto amount = result.Amount();
-    const auto sum_mask = result.GetUnknownData().sum_mask;
-    const auto [parent_board_key, parent_hand] = parent_key_hand_pair;
 
     auto* const entry = FindOrCreate(hand_);
-    entry->UpdateUnknown(depth_, pn, dn, amount, sum_mask, parent_board_key, parent_hand);
+    entry->UpdateUnknown(depth_, pn, dn, amount);
     entry->unlock();
   }
 

@@ -9,9 +9,8 @@
 #include <vector>
 
 #include "../../mate/mate.h"
-#include "board_key_hand_pair.hpp"
-#include "fixed_size_stack.hpp"
 #include "hands.hpp"
+#include "inline_stack.hpp"
 #include "path_keys.hpp"
 #include "typedefs.hpp"
 #include "visit_history.hpp"
@@ -93,8 +92,6 @@ class Node {
   Key BoardKey() const { return Pos().state()->board_key(); }
   /// 現在の経路ハッシュ値
   Key GetPathKey() const { return path_key_; }
-  /// 盤面ハッシュ値と攻め方の持ち駒を同時に取得する
-  BoardKeyHandPair GetBoardKeyHandPair() const { return {BoardKey(), OrHand()}; }
 
   /// 開始局面の指し手
   std::optional<Move> RootMove() const {
@@ -105,7 +102,7 @@ class Node {
     }
   }
   /// 開始局面からの指し手
-  const FixedSizeStack<Move, kDepthMax>& MovesFromStart() const { return moves_; }
+  const InlineStack<Move, kDepthMax>& MovesFromStart() const { return moves_; }
 
   /// `move` 後のハッシュ値
   Key KeyAfter(Move move) const { return Pos().key_after(move); }
@@ -121,8 +118,6 @@ class Node {
       return OrHand();
     }
   }
-  /// `move` 後の盤面ハッシュ値と攻め方の持ち駒を同時に取得する
-  BoardKeyHandPair BoardKeyHandPairAfter(Move move) const { return {BoardKeyAfter(move), OrHandAfter(move)}; }
 
   /// `move` で1手進める
   void DoMove(Move move) {
@@ -189,12 +184,12 @@ class Node {
 
   /// 現在の局面。move construct 可能にするために生参照ではなく `std::reference_wrapper` で持つ。
   std::reference_wrapper<Position> n_;
-  Color or_color_;                                  ///< OR node（攻め方）の手番
-  Depth depth_{};                                   ///< root から数えた探索深さ
-  VisitHistory visit_history_{};                    ///< 千日手・優等局面の一覧
-  FixedSizeStack<Move, kDepthMax> moves_{};         ///< 開始局面からの指し手
-  FixedSizeStack<StateInfo, kDepthMax> st_info_{};  ///< do_move で必要な一時領域
-  Key path_key_{};                                  ///< 経路ハッシュ値。差分計算により求める。
+  Color or_color_;                               ///< OR node（攻め方）の手番
+  Depth depth_{};                                ///< root から数えた探索深さ
+  VisitHistory visit_history_{};                 ///< 千日手・優等局面の一覧
+  InlineStack<Move, kDepthMax> moves_{};         ///< 開始局面からの指し手
+  InlineStack<StateInfo, kDepthMax> st_info_{};  ///< do_move で必要な一時領域
+  Key path_key_{};                               ///< 経路ハッシュ値。差分計算により求める。
 };
 
 /// 局面 n から moves で手を一気に進める。nに対し、moves の前から順に n.DoMove(m) を適用する。
@@ -212,20 +207,22 @@ inline void RollBack(Node& n, const std::vector<Move>& moves) {
 }
 
 /**
- * @brief (OR node限定) `n` が 1 手詰かどうか判定する。
- * @param n 現局面
+ * @brief (OR node限定) `pos` が 1 手詰かどうか判定する。
+ * @param pos 現局面
  * @return `Move` 1手詰があればその手。なければ `MOVE_NONE`。
  * @return `Hand` 1手詰があればその証明駒。なければ `kNullHand`。
  * @note 攻め方の玉に王手がかかっている等、一部局面では1手詰が見つけられない事がある。
  */
-inline std::pair<Move, Hand> CheckMate1Ply(Node& n) {
-  if (!n.Pos().in_check()) {
-    if (auto move = Mate::mate_1ply(n.Pos()); move != MOVE_NONE) {
-      n.DoMove(move);
-      auto hand = HandSet{ProofHandTag{}}.Get(n.Pos());
-      n.UndoMove();
+inline std::pair<Move, Hand> CheckMate1Ply(const Position& pos) {
+  if (!pos.in_check()) {
+    if (auto move = Mate::mate_1ply(pos); move != MOVE_NONE) {
+      // mate_1ply が返してくる手は必ず近接王手なので、HandSet{ProofHandTag{}} で証明駒を計算する必要はない
+      Hand hand = HAND_ZERO;
+      if (is_drop(move)) {
+        add_hand(hand, move_dropped_piece(move));
+      }
 
-      return {move, BeforeHand(n.Pos(), move, hand)};
+      return {move, hand};
     }
   }
   return {MOVE_NONE, kNullHand};

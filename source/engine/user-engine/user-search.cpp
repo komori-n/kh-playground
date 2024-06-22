@@ -76,12 +76,6 @@ void Search::clear() {
   }
   g_option.Reload(Options);
 
-#if defined(USE_DEEP_DFPN)
-  auto d = g_option.deep_dfpn_d_;
-  auto e = g_option.deep_dfpn_e_;
-  komori::DeepDfpnInit(d, e);
-#endif  // defined(USE_DEEP_DFPN)
-
   g_searcher.Init(g_option, Threads.size());
 }
 

@@ -7,7 +7,6 @@
 #include "../transposition_table.hpp"
 #include "test_lib.hpp"
 
-using komori::BitSet64;
 using komori::kDepthMax;
 using komori::tt::CircularEntryPointer;
 using komori::tt::RepetitionTable;
@@ -18,7 +17,7 @@ using testing::Return;
 namespace {
 
 struct RegularTableMock {
-  static constexpr std::size_t kSizePerEntry = 64;
+  static constexpr std::size_t kSizePerEntry = 40;
 
   MOCK_METHOD(void, Resize, (std::uint64_t));
   MOCK_METHOD(void, Clear, ());
@@ -70,7 +69,7 @@ TEST_F(TranspositionTableTest, Resize) {
   EXPECT_CALL(tt_.GetRepetitionTable(), Resize).WillOnce([&](std::uint64_t b) { m = b; });
   tt_.Resize(usi_hash_mb);
 
-  EXPECT_FLOAT_EQ((1 - kRegularRepetitionRatio) * n * sizeof(komori::tt::Entry), kRegularRepetitionRatio * m * 16);
+  EXPECT_FLOAT_EQ((1 - kRegularRepetitionRatio) * n * 40, kRegularRepetitionRatio * m * 16);
 }
 
 TEST_F(TranspositionTableTest, NewSearch) {
@@ -111,22 +110,6 @@ TEST_F(TranspositionTableTest, BuildChildQuery) {
   EXPECT_EQ(query.board_key, test_node->Pos().board_key_after(move));
   EXPECT_EQ(query.hand, test_node->OrHandAfter(move));
   EXPECT_EQ(query.depth, test_node->GetDepth() + 1);
-}
-
-TEST_F(TranspositionTableTest, BuildQueryByKey_Normal) {
-  const Key board_key = 0x334334334334;
-  const Key path_key = 0x264264264264;
-  const auto hand = MakeHand<PAWN, LANCE, LANCE>();
-
-  EXPECT_CALL(tt_.GetRegularTable(), PointerOf).WillOnce(Return(CircularEntryPointer{nullptr, nullptr, nullptr}));
-  const auto query = tt_.BuildQueryByKey({board_key, hand}, path_key);
-
-  EXPECT_EQ(&query.rep_table, &tt_.GetRepetitionTable());
-  EXPECT_EQ(query.initial_entry_pointer.data(), nullptr);
-  EXPECT_EQ(query.path_key, path_key);
-  EXPECT_EQ(query.board_key, board_key);
-  EXPECT_EQ(query.hand, hand);
-  EXPECT_EQ(query.depth, kDepthMax);
 }
 
 TEST_F(TranspositionTableTest, Hashfull) {

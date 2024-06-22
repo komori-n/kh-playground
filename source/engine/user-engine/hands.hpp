@@ -25,15 +25,6 @@ inline Hand CollectHand(const Position& n) {
   return MergeHand(n.hand_of(BLACK), n.hand_of(WHITE));
 }
 
-/// 持ち駒の枚数
-inline int CountHand(Hand hand) {
-  int count = 0;
-  for (PieceType pr = PIECE_HAND_ZERO; pr < PIECE_HAND_NB; ++pr) {
-    count += hand_count(hand, pr);
-  }
-  return count;
-}
-
 /// move 後の手駒を返す
 inline Hand AfterHand(const Position& n, Move move, Hand before_hand) {
   if (is_drop(move)) {
@@ -226,97 +217,6 @@ inline Hand AddIfHandGivesOtherEvasions(const Position& n, Hand proof_hand) {
 
   return proof_hand;
 }
-
-/// HandSet の初期化時に使うタグ（AND nodeの証明駒）
-struct ProofHandTag {};
-/// HandSet の初期化時に使うタグ（OR nodeの反証駒）
-struct DisproofHandTag {};
-
-/**
- * @brief 子局面の証明駒 or 反証駒をもとに、現局面の証明駒 or 反証駒を求めるクラス。
- *
- * AND node で詰みが判明しているとき、その局面の証明駒は子局面すべての証明駒の OR により計算できる。
- * 例）あるAND nodeの子局面が2つで、その証明駒がそれぞれ歩2、歩1桂2であるとき、元局面の証明駒は歩2桂2。
- *
- * OR node でも同様に反証駒を計算しなければならない。このクラスはそのような証明駒・反証駒を助けることが目的の
- * クラスである。以下のように、`Update()` で子局面全てに対し証明駒 or 反証駒の差分更新を行い、`Get()` で結果を取得する。
- *
- * ```cpp
- * HandSet hand_set{ProofHandTag{}};
- * for (auto move : MovePicker{n}) {
- *    auto proof_hand_i = CalculateProofHandFor(move);
- *    hand_set.Update(proof_hand_i);
- * }
- * auto proof_hand = hand_set.Get(n);
- * ```
- *
- * @note `Get()` の引数に `Position` が必要な理由は、
- *       [この記事](https://komorinfo.com/blog/proof-piece-and-disproof-piece/) を参照。
- */
-class HandSet {
- public:
-  /// AND node (ProofHand計算) 用の初期化関数
-  explicit HandSet(ProofHandTag) : proof_hand_{true}, val_{} {}
-  /// OR node (DisproofHand計算) 用の初期化関数
-  explicit HandSet(DisproofHandTag) : proof_hand_{false} {
-    for (PieceType pr = PIECE_HAND_ZERO; pr < PIECE_HAND_NB; ++pr) {
-      val_[pr] = PIECE_BIT_MASK2[pr];
-    }
-  }
-
-  /// Default constructor(delete)
-  HandSet() = delete;
-  /// Copy constructor(default)
-  HandSet(const HandSet&) = default;
-  /// Move constructor(default)
-  HandSet(HandSet&&) noexcept = default;
-  /// Copy assign operator(default)
-  HandSet& operator=(const HandSet&) = default;
-  /// Move assign operator(default)
-  HandSet& operator=(HandSet&&) noexcept = default;
-  /// Destructor(default)
-  ~HandSet() = default;
-
-  /**
-   * @brief 局面 `n` に対する証明駒 or 反証駒を計算する。
-   * @param n 現局面
-   * @return 証明駒 or 反証駒
-   */
-  Hand Get(const Position& n) const {
-    std::uint32_t x = 0;
-    for (std::size_t pr = PIECE_HAND_ZERO; pr < PIECE_HAND_NB; ++pr) {
-      x |= val_[pr];
-    }
-
-    auto hand = static_cast<Hand>(x);
-    if (proof_hand_) {
-      return AddIfHandGivesOtherEvasions(n, hand);
-    } else {
-      return RemoveIfHandGivesOtherChecks(n, hand);
-    }
-  }
-
-  /**
-   * @brief 証明駒 or 反証駒を追加するして内部状態を更新する。
-   * @param hand 証明駒 or 反証駒
-   */
-  void Update(Hand hand) {
-    if (proof_hand_) {
-      for (PieceType pr = PIECE_HAND_ZERO; pr < PIECE_HAND_NB; ++pr) {
-        val_[pr] = std::max(val_[pr], hand_exists(hand, pr));
-      }
-    } else {
-      for (PieceType pr = PIECE_HAND_ZERO; pr < PIECE_HAND_NB; ++pr) {
-        val_[pr] = std::min(val_[pr], hand_exists(hand, pr));
-      }
-    }
-  }
-
- private:
-  bool proof_hand_;  ///< 証明駒計算（`ProofHandTag` で初期化された）なら true.
-  /// 現在計算中の証明駒 or 反証駒。計算を高速化するために Hand ではなく手駒の種類ごとに分けて持つ。
-  std::array<std::uint32_t, PIECE_HAND_NB> val_;
-};
 }  // namespace komori
 
 #endif  // KOMORI_HANDS_HPP_

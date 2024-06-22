@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "engine_option.hpp"
-#include "expansion_stack.hpp"
+#include "local_expansion.hpp"
 #include "pv_list.hpp"
 #include "score.hpp"
 #include "search_monitor.hpp"
@@ -171,8 +171,8 @@ class KomoringHeights {
 
   SearchMonitor monitor_;  ///< 探索モニター
 
-  std::vector<Move> best_moves_;                 ///< 詰み手順
-  std::deque<ExpansionStack> expansion_list_{};  ///< 局面展開のための一時領域
+  std::vector<Move> best_moves_;                                          ///< 詰み手順
+  std::vector<InlineStack<LocalExpansion, kDepthMax>> expansion_list_{};  ///< スレッドごとの局面展開のための一時領域
   Score score_{};  ///< 現在の探索評価値。余詰探索中に CurrentInfo() で取得できるようにここにおいておく
 
   PvList pv_list_;  ///< 各手に対する PV の一覧

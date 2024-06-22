@@ -3,7 +3,6 @@
 #include "../search_result.hpp"
 #include "test_lib.hpp"
 
-using komori::BitSet64;
 using komori::FinalData;
 using komori::MateLen;
 using komori::NodeState;
@@ -20,12 +19,11 @@ TEST(SearchResultTest, ConstructFirstVisit) {
   EXPECT_EQ(result.Amount(), 10);
   EXPECT_FALSE(result.IsFinal());
   EXPECT_TRUE(result.GetUnknownData().is_first_visit);
-  EXPECT_EQ(result.GetUnknownData().sum_mask, BitSet64::Full());
   EXPECT_EQ(result.GetNodeState(), NodeState::kUnknown);
 }
 
 TEST(SearchResultTest, ConstructUnknown) {
-  const auto result = SearchResult::MakeUnknown(33, 4, MateLen{264}, 10, BitSet64{445});
+  const auto result = SearchResult::MakeUnknown(33, 4, MateLen{264}, 10);
 
   EXPECT_EQ(result.Pn(), 33);
   EXPECT_EQ(result.Dn(), 4);
@@ -33,7 +31,6 @@ TEST(SearchResultTest, ConstructUnknown) {
   EXPECT_EQ(result.Amount(), 10);
   EXPECT_FALSE(result.IsFinal());
   EXPECT_FALSE(result.GetUnknownData().is_first_visit);
-  EXPECT_EQ(result.GetUnknownData().sum_mask, BitSet64{445});
   EXPECT_EQ(result.GetNodeState(), NodeState::kUnknown);
 }
 

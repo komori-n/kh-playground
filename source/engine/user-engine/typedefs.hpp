@@ -201,11 +201,15 @@ enum class NodeState {
 /**
  * @brief 証明数／反証数を格納する型
  *
- * 32ビット整数だとすぐにオーバーフローしてしまうので、64ビット整数を用いる。
+ * 16/32/64ビットの符号なし整数。ただし、何も特別な対策をせずに16ビット整数を用いると、以下の局面で
+ * dnがオーバーフローすることがわかっている。
+ *
+ *    やねうら王 500万問詰将棋問題集 11手詰 294217番
+ *    sfen ln3p1+R1/4k4/2p3p2/3Sp4/p4P2p/P4+bP2/4P3P/3+p1G3/LN3K3 w R3S2N2Pb3g2l4p 1
  */
-using PnDn = std::uint64_t;
+using PnDn = std::uint32_t;
 /// pn/dn の最大値。オーバーフローを避けるために、max() より少し小さな値を設定する。
-inline constexpr PnDn kInfinitePnDn = std::numeric_limits<PnDn>::max() / 2 - 1;
+inline constexpr PnDn kInfinitePnDn = std::numeric_limits<PnDn>::max() - 2 * kMaxCheckMovesPerNode;
 /// pn/dn 値の単位。df-pn+ では「評価値0.5」のような小数を扱いたいので1より大きな値を用いれるようにする。
 inline constexpr PnDn kPnDnUnit = 2;
 /**
@@ -335,6 +339,11 @@ inline bool DoesHaveMatePossibility(const Position& n) {
     }
   }
 
+  if (n.pieces(us, ROOK_DRAGON)) {
+    // 盤面に飛車がある場合は early return
+    return true;
+  }
+
   KOMORI_HAND_LOOP_UNROLL for (PieceType pr = PIECE_HAND_ZERO; pr < PIECE_HAND_NB; ++pr) {
     if (hand_exists(hand, pr)) {
       if (pr == PAWN && (n.pieces(us, PAWN) & file_bb(file_of(king_sq)))) {
@@ -352,12 +361,12 @@ inline bool DoesHaveMatePossibility(const Position& n) {
                   (n.pieces(KNIGHT) & check_candidate_bb(us, KNIGHT, king_sq)) |
                   (n.pieces(SILVER) & check_candidate_bb(us, SILVER, king_sq)) |
                   (n.pieces(GOLDS) & check_candidate_bb(us, GOLD, king_sq)) |
-                  (n.pieces(BISHOP) & check_candidate_bb(us, BISHOP, king_sq)) | (n.pieces(ROOK_DRAGON)) |
+                  (n.pieces(BISHOP) & check_candidate_bb(us, BISHOP, king_sq)) |
                   (n.pieces(HORSE) & check_candidate_bb(us, ROOK, king_sq))) &
                  n.pieces(us);
   const auto y = n.blockers_for_king(them) & n.pieces(us);
 
-  return x | y;
+  return x.pop_count() > 0 || y.pop_count() > 0;
 }
 }  // namespace komori
 
