@@ -375,37 +375,3 @@ TEST(EntryTest, UpdateDisproven_Amount) {
   entry.UpdateDisproven(MateLen{334}, amount2);
   EXPECT_EQ(entry.Amount(), amount2 + 334 * kFinalAmountBonus);
 }
-
-TEST(EntryTest, UpdateFinalRange_Superior) {
-  Entry entry;
-  const MateLen len{334};
-  entry.Init(0x264, MakeHand<PAWN, LANCE, LANCE, GOLD>());
-  entry.UpdateDisproven(len, 1);
-
-  MateLen disproven_len = kMinus1MateLen;
-  MateLen proven_len = kDepthMaxPlus1MateLen;
-  entry.UpdateFinalRange(MakeHand<PAWN, LANCE>(), disproven_len, proven_len);
-  EXPECT_EQ(disproven_len, len);
-  EXPECT_EQ(proven_len, kDepthMaxPlus1MateLen);
-
-  disproven_len = len + 1;
-  entry.UpdateFinalRange(MakeHand<PAWN, LANCE>(), disproven_len, proven_len);
-  EXPECT_EQ(disproven_len, len + 1);
-}
-
-TEST(EntryTest, UpdateFinalRange_Inferior) {
-  Entry entry;
-  const MateLen len{334};
-  entry.Init(0x264, HAND_ZERO);
-  entry.UpdateProven(len, 1);
-
-  MateLen disproven_len = kMinus1MateLen;
-  MateLen proven_len = kDepthMaxPlus1MateLen;
-  entry.UpdateFinalRange(MakeHand<PAWN, LANCE>(), disproven_len, proven_len);
-  EXPECT_EQ(disproven_len, kMinus1MateLen);
-  EXPECT_EQ(proven_len, len);
-
-  proven_len = len - 1;
-  entry.UpdateFinalRange(MakeHand<PAWN, LANCE>(), disproven_len, proven_len);
-  EXPECT_EQ(proven_len, len - 1);
-}

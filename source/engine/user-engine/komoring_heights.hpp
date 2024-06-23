@@ -8,6 +8,7 @@
 
 #include "engine_option.hpp"
 #include "local_expansion.hpp"
+#include "move_path.hpp"
 #include "pv_list.hpp"
 #include "score.hpp"
 #include "search_monitor.hpp"
@@ -81,6 +82,18 @@ class KomoringHeights {
    */
   std::pair<NodeState, MateLen> SearchMainLoop(Node& n);
 
+  SearchResult FirstSearch(Node& n);
+
+  /**
+   * @brief `n` に対し `mate_len` 手以下の詰み手順を `mate_path` に格納する
+   * @param n 現局面
+   * @param max_len 現局面の最大詰み手数
+   * @param move_path 詰み手順
+   * @pre 現局面が `mate_len` 手以下の詰みであること
+   * @return 探索結果
+   */
+  SearchResult ConstructPv(Node& n, MateLen max_len, MovePath& move_path);
+
   /**
    * @brief `n` が `len` 手以下で詰むかを探索する
    * @param n 現局面
@@ -93,16 +106,6 @@ class KomoringHeights {
   SearchResult SearchEntry(Node& n, MateLen len);
 
   /**
-   * @brief 詰め探索の本体。root node専用の `SearchImpl()`。
-   * @param n 現局面（root node）
-   * @param thpn pn のしきい値
-   * @param thdn dn のしきい値
-   * @param len  残り手数
-   * @return 探索結果
-   */
-  SearchResult SearchImplForRoot(Node& n, PnDn thpn, PnDn thdn, MateLen len);
-
-  /**
    * @brief 詰め探索の本体。（再帰関数）
    * @param n 現局面
    * @param thpn pn のしきい値
@@ -112,47 +115,6 @@ class KomoringHeights {
    * @return 探索結果
    */
   SearchResult SearchImpl(Node& n, PnDn thpn, PnDn thdn, MateLen len, std::uint32_t& inc_flag);
-
-  /**
-   * @brief 現時点の探索結果から詰め手順を取得する
-   * @param n 現局面
-   * @param len 詰み手数の上限値
-   * @param exact 正確に len 手詰を取得するか（default: false）
-   * @return 詰み手順
-   * @pre メインスレッドから呼び出すこと
-   */
-  std::vector<Move> GetMatePath(Node& n, MateLen len, bool exact = false);
-
-  /**
-   * @brief OR node `n` における len 手以下詰めの最善手とそのときの詰み手数を取得する
-   * @param n 現局面
-   * @param len 詰み手数の上限値
-   * @param exact 正確に len 手詰を取得するか
-   * @return 最善手とそのときの詰み手数
-   */
-  std::pair<Move, MateLen> GetBestMoveOrNode(Node& n, MateLen len, bool exact);
-  /**
-   * @brief AND node `n` における len 手以下詰めの最善手とそのときの詰み手数を取得する
-   * @param n 現局面
-   * @param len 詰み手数の上限値
-   * @param exact 正確に len 手詰を取得するか
-   * @return 最善手とそのときの詰み手数
-   */
-  std::pair<Move, MateLen> GetBestMoveAndNode(Node& n, MateLen len, bool exact);
-
-  /**
-   * @brief `move` に対する PV を構成して `pv_list_` を更新する
-   * @param n       現局面
-   * @param move    PV に追加する手
-   * @param result  探索結果
-   *
-   * `move` が詰みのとき、詰みに至るまでの手順を1つ `pv_list_` へ登録する。このとき、`result.Len()` に書かれた
-   * 手数以下の詰み手順が登録されることは保証されているが、厳密に `result.Len()` 手詰みであることは保証されない。
-   *
-   * `move` が（余詰探索関係なく）不詰のとき、`n` が OR node であれば `move` 直後に詰みを逃れる応手を PV へ追加して
-   * 結果を登録する。
-   */
-  void UpdateFinalPv(Node& n, Move move, const SearchResult& result);
 
   /// 現在の探索情報を取得する
   /// @pre メインスレッドから呼び出すこと
@@ -167,7 +129,7 @@ class KomoringHeights {
 
   tt::TranspositionTable tt_;  ///< 置換表
   EngineOption option_;        ///< エンジンオプション
-  bool pv_search_{false};      ///< 現在PV探索中かどうか
+  Barrier barrier_;            ///< スレッドの同期用バリア
 
   SearchMonitor monitor_;  ///< 探索モニター
 

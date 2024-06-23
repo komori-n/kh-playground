@@ -142,6 +142,29 @@ class Node {
     moves_.Pop();
   }
 
+  /// 千日手判定を省いた DoMove()。局面を戻すときは UndoMoveNoRepetition() を使うこと
+  void DoMoveNoRepetition(Move move) {
+    moves_.Push(move);
+    path_key_ = PathKeyAfter(move);
+    path_key_ += kNoRepetitionMoveKey;
+
+    st_info_.Push(StateInfo{});
+    Pos().do_move(move, st_info_.back());
+    depth_++;
+  }
+
+  /// 千日手判定を省いた UndoMove()
+  void UndoMoveNoRepetition() {
+    const auto last_move = moves_.back();
+    depth_--;
+    Pos().undo_move(last_move);
+
+    st_info_.Pop();
+    path_key_ -= kNoRepetitionMoveKey;
+    path_key_ = PathKeyBefore(last_move);
+    moves_.Pop();
+  }
+
   /// 現局面が千日手かどうか
   std::optional<Depth> IsRepetition() const { return visit_history_.Contains(BoardKey(), this->OrHand()); }
 
@@ -179,6 +202,8 @@ class Node {
   }
 
  private:
+  static constexpr Key kNoRepetitionMoveKey = 0x3304330433043304ULL;
+
   /// `move` 直前の経路ハッシュ値
   Key PathKeyBefore(Move move) const { return ::komori::PathKeyBefore(path_key_, move, depth_); }
 

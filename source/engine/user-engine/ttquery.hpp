@@ -82,6 +82,7 @@ class Query {
    * @param does_have_old_child  unproven old child の結果を使った場合 `true` が書かれる変数
    * @param len 探している詰み手数
    * @param eval_func 初期値を計算する関数。エントリが見つからなかったときのみ呼ばれる。
+   * @param strict_lookup 厳密な探索を行うかどうか。false のときは、詰みを見つけたらすぐにそれを返す。
    * @return Look Up 結果
    *
    * 置換表を探索して現局面の探索情報を返す関数。
@@ -90,7 +91,10 @@ class Query {
    * 必要な時のみ `eval_func` の呼び出しを行うことで、呼び出さないパスの高速化ができる。
    */
   template <typename InitialEvalFunc>
-  SearchResult LookUp(bool& does_have_old_child, MateLen len, InitialEvalFunc&& eval_func) const {
+  SearchResult LookUp(bool& does_have_old_child,
+                      MateLen len,
+                      InitialEvalFunc&& eval_func,
+                      bool strict_lookup = false) const {
     PnDn pn = 1;
     PnDn dn = 1;
     SearchAmount amount = 1;
@@ -105,9 +109,29 @@ class Query {
         if (itr->LookUp(hand_, depth_, len, pn, dn, does_have_old_child)) {
           amount = std::max(amount, itr->Amount());
           if (pn == 0) {
-            return SearchResult::MakeFinal<true>(itr->GetHand(), itr->ProvenLen(), amount);
+            Hand proof_hand = itr->GetHand();
+            MateLen proven_len = itr->ProvenLen();
+            if (strict_lookup) {
+              for (auto itr2 = ++itr; !itr2->IsNull(); ++itr2) {
+                std::shared_lock lock2{*itr2};
+                if (itr2->IsFor(board_key_) && itr2->UpdateProvenLen(hand_, proven_len)) {
+                  proof_hand = itr2->GetHand();
+                }
+              }
+            }
+            return SearchResult::MakeFinal<true>(proof_hand, proven_len, amount);
           } else if (dn == 0) {
-            return SearchResult::MakeFinal<false>(itr->GetHand(), itr->DisprovenLen(), amount);
+            Hand disproof_hand = itr->GetHand();
+            MateLen disproven_len = itr->DisprovenLen();
+            if (strict_lookup) {
+              for (auto itr2 = ++itr; !itr2->IsNull(); ++itr2) {
+                std::shared_lock lock2{*itr2};
+                if (itr2->IsFor(board_key_) && itr2->UpdateDisprovenLen(hand_, disproven_len)) {
+                  disproof_hand = itr2->GetHand();
+                }
+              }
+            }
+            return SearchResult::MakeFinal<false>(disproof_hand, disproven_len, amount);
           } else if (itr->GetHand() == hand_) {
             if (itr->IsPossibleRepetition()) {
               if (const auto opt = rep_table_->Contains(path_key_, len)) {
@@ -134,34 +158,6 @@ class Query {
     return SearchResult::MakeFirstVisit(pn, dn, len, amount);
   }
   // LCOV_EXCL_STOP NOLINTEND
-
-  /**
-   * @brief 詰み／不詰手数専用の LookUp()
-   * @return pair<最長不詰手数、最短詰み手数>
-   *
-   * 現局面の最長不詰手数および最短詰み手数を得る関数。LookUp() を単純に使うと、詰み手数と不詰手数を同時に得るのは
-   * 難しいため、専用関数として提供する。詰み探索終了後の手順の復元に用いることを想定している。
-   */
-  std::pair<MateLen, MateLen> FinalRange() const noexcept {
-    MateLen disproven_len = kMinus1MateLen;
-    MateLen proven_len = kDepthMaxPlus1MateLen;
-
-    for (auto itr = initial_entry_pointer_; !itr->IsNull(); ++itr) {
-      const std::shared_lock lock(*itr);
-
-      if (itr->IsFor(board_key_)) {
-        itr->UpdateFinalRange(hand_, disproven_len, proven_len);
-
-        if (itr->IsFor(board_key_, hand_) && itr->IsPossibleRepetition()) {
-          if (const auto opt = rep_table_->Contains(path_key_, disproven_len)) {
-            disproven_len = std::max(disproven_len, opt->second);
-          }
-        }
-      }
-    }
-
-    return {MateLen{disproven_len}, MateLen{proven_len}};
-  }
 
   /**
    * @brief 探索結果 `result` を置換表に書き込む

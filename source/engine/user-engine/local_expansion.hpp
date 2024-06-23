@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <optional>
-#include <thread>
 #include <utility>
 
 #include "hands.hpp"
@@ -119,7 +118,12 @@ class LocalExpansion {
    * @param first_search 初回探索なら `true`。`true` なら高速 1 手詰めルーチンを走らせる。
    * @param multi_pv 勝ちになる手をいくつ見つけるか。1以上でなければならない
    */
-  LocalExpansion(tt::TranspositionTable& tt, const Node& n, MateLen len, bool first_search, std::uint32_t multi_pv = 1)
+  LocalExpansion(tt::TranspositionTable& tt,
+                 const Node& n,
+                 MateLen len,
+                 bool first_search,
+                 std::uint32_t multi_pv = 1,
+                 bool strict_lookup = false)
       : or_node_{n.IsOrNode()}, mp_{n, true}, len_{len}, multi_pv_{multi_pv}, lazy_expansion_{n, mp_} {
     const MateLen min_len = or_node_ ? MateLen{0} : MateLen{1};
     for (const auto& [i_raw, move] : WithIndex<std::uint32_t>(mp_)) {
@@ -132,7 +136,7 @@ class LocalExpansion {
       } else if (len_ < min_len + 1) {
         result = SearchResult::MakeFinal<false>(n.OrHandAfter(move.move), min_len - 1, 1);
       } else {
-        result = query.LookUp(does_have_old_child_, len - 1, MakeInitialEvaluationFunc(n, move));
+        result = query.LookUp(does_have_old_child_, len - 1, MakeInitialEvaluationFunc(n, move), strict_lookup);
 
         if (!result.IsFinal() && lazy_expansion_.HasPrev(i_raw)) {
           // prev がいる non-final な手は、prev が final になるまで探索を後回しにする
@@ -237,11 +241,11 @@ class LocalExpansion {
     const auto& query = queries_[old_i_raw];
     auto& result = results_[old_i_raw];
     const PnDn orig_delta = result.Delta(or_node_);
-
+    const bool orig_was_final = result.IsFinal();
     result = search_result;
     query.SetResult(search_result);
 
-    if (result.IsFinal()) {
+    if (!orig_was_final && result.IsFinal()) {
       valid_child_num_--;
     }
 
@@ -260,7 +264,7 @@ class LocalExpansion {
     }
 
     bool needs_recalc_delta = (orig_delta == delta_max_);
-    if (search_result.IsFinal()) {
+    if (!orig_was_final && search_result.IsFinal()) {
       ResortFront();
 
       std::uint32_t j_raw = old_i_raw;

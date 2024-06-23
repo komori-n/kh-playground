@@ -1,46 +1,16 @@
 #ifndef KOMORI_TEST_LIB_HPP_
 #define KOMORI_TEST_LIB_HPP_
 
-#include <condition_variable>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <thread>
 
 #include "../../../thread.h"
 #include "../move_picker.hpp"
 #include "../node.hpp"
+#include "../typedefs.hpp"
 
-/**
- * @brief A barrier for multi thread synchronization.
- */
-class Barrier {
- public:
-  explicit Barrier(std::size_t num_threads) : num_threads_(num_threads) {}
-
-  /**
-   * @brief Wait until all threads call `Await()`.
-   */
-  void Await() {
-    std::unique_lock<std::mutex> lock(mutex_);
-    waiting_++;
-    if (waiting_ == num_threads_) {
-      waiting_ = 0;
-      generation_++;
-      cv_.notify_all();
-    } else {
-      const auto gen = generation_;
-      cv_.wait(lock, [this, gen] { return gen != generation_; });
-    }
-  }
-
- private:
-  const std::size_t num_threads_;
-  std::size_t waiting_{};
-  std::uint64_t generation_{};
-  std::condition_variable cv_;
-  std::mutex mutex_;
-};
+using komori::Barrier;
 
 template <typename... Tasks>
 inline bool ParallelExecute(std::chrono::milliseconds time_limit, Tasks&&... tasks) {

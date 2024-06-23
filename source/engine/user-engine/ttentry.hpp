@@ -356,32 +356,33 @@ class alignas(32) Entry {
   }
 
   /**
-   * @brief 詰み／不詰手数専用の LookUp()
-   * @param hand          現局面の持ち駒
-   * @param disproven_len 現在の不詰手数
-   * @param proven_len    現在の詰み手数
-   * @pre disproven_len < proven_len
-   * @pre IsFor(board_key_)
+   * @brief 詰み手数専用の LookUp
    *
-   * 詰み／不詰手数に特化した LookUp。探索結果結果の読み出しに用いる。
-   *
-   * 以下の 2 つの変数 `disproven_len`、`proven_len` を受け取り、これらを更新して返す。
-   *
-   * - 高々 `proven_len` 手で詰み
-   * - 少なくとも `disproven_len` 手で詰まない
+   * @param hand
+   * @param proven_len
+   * @return
+   * @return
    */
-  void UpdateFinalRange(Hand hand, MateLen& disproven_len, MateLen& proven_len) const noexcept {
+  bool UpdateProvenLen(Hand hand, MateLen& proven_len) const noexcept {
+    const Hand entry_hand = hand_.load(std::memory_order_relaxed);
+    const bool is_superior = hand_is_equal_or_superior(hand, entry_hand);
+    if (is_superior && proven_len > proven_len_) {
+      proven_len = proven_len_;
+      return true;
+    }
+
+    return false;
+  }
+
+  bool UpdateDisprovenLen(Hand hand, MateLen& disproven_len) const noexcept {
     const Hand entry_hand = hand_.load(std::memory_order_relaxed);
     const bool is_inferior = hand_is_equal_or_superior(entry_hand, hand);
-    const bool is_superior = hand_is_equal_or_superior(hand, entry_hand);
-
-    if (is_inferior) {
-      disproven_len = std::max(disproven_len, disproven_len_);
+    if (is_inferior && disproven_len < disproven_len_) {
+      disproven_len = disproven_len_;
+      return true;
     }
 
-    if (is_superior) {
-      proven_len = std::min(proven_len, proven_len_);
-    }
+    return false;
   }
 
   // <テスト用>

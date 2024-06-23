@@ -4,7 +4,9 @@
 #ifndef KOMORI_TYPEDEFS_HPP_
 #define KOMORI_TYPEDEFS_HPP_
 
+#include <condition_variable>
 #include <limits>
+#include <mutex>
 #include <string>
 
 #include "../../bitboard.h"
@@ -339,6 +341,39 @@ class Defer {
  private:
   /// デストラクタで実行する関数
   std::function<void()> f_;
+};
+
+/**
+ * @brief A barrier for multi thread synchronization.
+ */
+class Barrier {
+ public:
+  Barrier() = default;
+  explicit Barrier(std::size_t num_threads) { Initialize(num_threads); }
+  void Initialize(std::size_t num_threads) { num_threads_ = num_threads; }
+
+  /**
+   * @brief Wait until all threads call `Await()`.
+   */
+  void Await() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    waiting_++;
+    if (waiting_ == num_threads_) {
+      waiting_ = 0;
+      generation_++;
+      cv_.notify_all();
+    } else {
+      const auto gen = generation_;
+      cv_.wait(lock, [this, gen] { return gen != generation_; });
+    }
+  }
+
+ private:
+  std::size_t num_threads_{};
+  std::size_t waiting_{};
+  std::uint64_t generation_{};
+  std::condition_variable cv_;
+  std::mutex mutex_;
 };
 
 /**
