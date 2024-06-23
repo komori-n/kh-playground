@@ -19,6 +19,9 @@ class MovePath {
   MovePath& operator=(MovePath&& rhs) noexcept = default;
   ~MovePath() = default;
 
+  /// 手順を削除する
+  void Clear() { moves_.clear(); }
+
   /**
    * @brief `move` を探す `depth` 手目に追加する。ただし、`depth` より深い手順は削除する。
    * @param move 次の手

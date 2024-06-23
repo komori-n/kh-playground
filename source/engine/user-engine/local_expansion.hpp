@@ -158,7 +158,11 @@ class LocalExpansion {
         lazy_expansion_.Remove(i_raw);
         if (result.Phi(or_node_) == 0) {
           if (excluded_moves_ >= multi_pv_ - 1) {
-            break;
+            if (strict_lookup) {
+              continue;
+            } else {
+              break;
+            }
           }
 
           excluded_moves_++;
@@ -249,7 +253,7 @@ class LocalExpansion {
       valid_child_num_--;
     }
 
-    if (search_result.Phi(or_node_) == 0) {
+    if (!orig_was_final && search_result.Phi(or_node_) == 0) {
       // 後から見つかった手のほうがいい手かもしれないので、前半部分をソートし直しておく
       ResortExcludedBack();
       if (excluded_moves_ >= multi_pv_ - 1) {
@@ -560,6 +564,7 @@ class LocalExpansion {
   /// 勝ちになる手を見つけた個数
   /// multi_pv_ == 1 のときは、この値は常に 0 である。multi_pv_ > 1 のとき、勝ち（phi==0）を見つけた後に探索を続ける
   /// 際に用いる。常に excluded_moves_ <= multi_pv_ - 1 かつ excluded_moves_ <= mp_.size() である。
+ public:
   std::uint32_t excluded_moves_{0};
 };
 }  // namespace komori

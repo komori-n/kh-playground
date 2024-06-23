@@ -94,19 +94,19 @@ class KomoringHeights {
    * @brief 局面 `n` が `len` 手以下で詰むかどうかを探索する
    * @param n 現局面
    * @param len 詰み手数
+   * @param multi_pv Multi PV の数
    * @return 探索結果
    */
-  SearchResult SearchEntry(Node& n, MateLen len);
+  SearchResult SearchEntry(Node& n, MateLen len, std::uint32_t multi_pv);
 
   /**
-   * @brief `n` に対し `mate_len` 手以下の詰み手順を `mate_path` に格納する
+   * @brief `n` に対し `mate_len` 手以下の詰み手順を `pv_moves_` に格納する
    * @param n 現局面
    * @param max_len 現局面の最大詰み手数
-   * @param move_path 詰み手順
    * @pre 現局面が `mate_len` 手以下の詰みであること
    * @return 探索結果
    */
-  SearchResult ConstructPv(Node& n, MateLen max_len, MovePath& move_path);
+  SearchResult ConstructPv(Node& n, MateLen max_len);
 
   /**
    * @brief 詰め探索の本体。（再帰関数）
@@ -146,11 +146,15 @@ class KomoringHeights {
   std::vector<InlineStack<LocalExpansion, kDepthMax>> expansion_list_{};  ///< スレッドごとの局面展開のための一時領域
   Score score_{};  ///< 現在の探索評価値。余詰探索中に CurrentInfo() で取得できるようにここにおいておく
 
-  PvList pv_list_;  ///< 各手に対する PV の一覧
+  std::mutex mutex_;          ///< pv_list_ の排他制御のための mutex
+  PvList pv_list_;            ///< 各手に対する PV の一覧
+  bool in_pv_search_{false};  ///< PV探索中かどうか
+  MovePath pv_moves_;         ///< PVの手順
 
   std::atomic<bool> should_break_main_loop_{false};  ///< メインループを抜けるかどうか
   std::vector<Move> moves_from_root_;                ///< 探索開始局面
   MateLen mate_len_{kZeroMateLen};                   ///< 探索手数
+  std::uint32_t multi_pv_{1};                        ///< Multi PV の数
   std::vector<SearchResult> search_results_;         ///< 各スレッドの探索結果
 };
 }  // namespace komori

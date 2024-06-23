@@ -142,6 +142,17 @@ class PvList {
     return ret;
   }
 
+  /// 手 `move` に対する探索結果を返す
+  PvInfo GetPvInfo(Move move) {
+    for (const auto i_raw : idx_) {
+      if (pv_info_[i_raw].move == move) {
+        return pv_info_[i_raw];
+      }
+    }
+
+    return {};
+  }
+
   /**
    * @brief 開始局面における PV を返す
    * @return 開始局面における PV
