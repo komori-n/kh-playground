@@ -118,7 +118,7 @@ NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_n
     // pv作成
     in_pv_search_ = true;
     result = ConstructPv(node, result.Len());
-    score_ = Score::Make(option_.score_method, result, node.IsRootOrNode());
+    score_ = score_maker_.Make(result, node.IsRootOrNode());
 
     best_moves_ = pv_moves_.Moves();
   }
@@ -165,7 +165,7 @@ SearchResult KomoringHeights::SearchEntry(Node& n, MateLen len, std::uint32_t mu
     }
 
     if (tl_thread_id == 0 && !score_.IsFinal()) {
-      score_ = Score::Make(option_.score_method, result, n.IsRootOrNode());
+      score_ = score_maker_.Make(result, n.IsRootOrNode());
     }
 
     std::tie(thpn, thdn) = NextPnDnThresholds(result.Pn(), result.Dn(), thpn, thdn);
@@ -374,7 +374,7 @@ void KomoringHeights::Print(const Node& n) {
         break;
       }
       const PvList::PvInfo pv_info = pv_list_.GetPvInfo(move);
-      Score score = Score::Make(option_.score_method, pv_info.result, n.IsRootOrNode());
+      Score score = score_maker_.Make(pv_info.result, n.IsRootOrNode());
       score.AddOneIfFinal();
       info.PushPVBack(pv_info.depth, score.ToString(), ToString(pv_info.pv));
     }

@@ -140,7 +140,8 @@ class KomoringHeights {
   ///                    この区間はメインスレッド以外は停止しているので、特にメンバ変数の排他を取る必要はない。
   Barrier barrier_;
 
-  SearchMonitor monitor_;  ///< 探索モニター
+  SearchMonitor monitor_;                                     ///< 探索モニター
+  ScoreMaker score_maker_{ScoreCalculationMethod::kPonanza};  ///< 評価値を作成するオブジェクト
 
   std::vector<Move> best_moves_;                                          ///< 詰み手順
   std::vector<InlineStack<LocalExpansion, kDepthMax>> expansion_list_{};  ///< スレッドごとの局面展開のための一時領域
