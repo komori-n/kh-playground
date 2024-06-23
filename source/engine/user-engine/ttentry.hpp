@@ -180,8 +180,8 @@ class alignas(32) Entry {
     hand_.store(hand, std::memory_order_relaxed);
     amount_ = 1;
     board_key_ = board_key;
-    proven_len_ = kDepthMaxPlus1MateLen;
-    disproven_len_ = kMinus1MateLen;
+    proven_len_ = kDepthMaxPlus1MateLen16;
+    disproven_len_ = kMinus1MateLen16;
 
     pn_ = 1;
     dn_ = 1;
@@ -282,8 +282,8 @@ class alignas(32) Entry {
    * @pre `len` > `disproven_len_`
    */
   void UpdateProven(MateLen len, SearchAmount amount) noexcept {
-    KOMORI_PRECONDITION(disproven_len_ < len);
-    proven_len_ = std::min(proven_len_, len);
+    KOMORI_PRECONDITION(disproven_len_ < MateLen16{len});
+    proven_len_ = std::min(proven_len_, MateLen16{len});
     amount_ = std::max(amount_, SaturatedAdd(amount, len.Len() * detail::kFinalAmountBonus));
   }
 
@@ -295,8 +295,8 @@ class alignas(32) Entry {
    * @pre `len` < `proven_len_`
    */
   void UpdateDisproven(MateLen len, SearchAmount amount) noexcept {
-    KOMORI_PRECONDITION(len < proven_len_);
-    disproven_len_ = std::max(disproven_len_, len);
+    KOMORI_PRECONDITION(MateLen16{len} < proven_len_);
+    disproven_len_ = std::max(disproven_len_, MateLen16{len});
     amount_ = std::max(amount_, SaturatedAdd(amount, len.Len() * detail::kFinalAmountBonus));
   }
 
@@ -366,8 +366,8 @@ class alignas(32) Entry {
   bool UpdateProvenLen(Hand hand, MateLen& proven_len) const noexcept {
     const Hand entry_hand = hand_.load(std::memory_order_relaxed);
     const bool is_superior = hand_is_equal_or_superior(hand, entry_hand);
-    if (is_superior && proven_len > proven_len_) {
-      proven_len = proven_len_;
+    if (is_superior && proven_len > MateLen{proven_len_}) {
+      proven_len = MateLen{proven_len_};
       return true;
     }
 
@@ -377,8 +377,8 @@ class alignas(32) Entry {
   bool UpdateDisprovenLen(Hand hand, MateLen& disproven_len) const noexcept {
     const Hand entry_hand = hand_.load(std::memory_order_relaxed);
     const bool is_inferior = hand_is_equal_or_superior(entry_hand, hand);
-    if (is_inferior && disproven_len < disproven_len_) {
-      disproven_len = disproven_len_;
+    if (is_inferior && disproven_len < MateLen{disproven_len_}) {
+      disproven_len = MateLen{disproven_len_};
       return true;
     }
 
@@ -391,9 +391,9 @@ class alignas(32) Entry {
   /// 最小距離
   Depth MinDepth() const noexcept { return static_cast<Depth>(min_depth_.load(std::memory_order_relaxed)); }
   /// 詰み手数
-  MateLen ProvenLen() const noexcept { return proven_len_; }
+  MateLen ProvenLen() const noexcept { return MateLen{proven_len_}; }
   /// 不詰手数
-  MateLen DisprovenLen() const noexcept { return disproven_len_; }
+  MateLen DisprovenLen() const noexcept { return MateLen{disproven_len_}; }
   /// pn
   PnDn Pn() const noexcept { return pn_; }
   /// dn
@@ -411,10 +411,11 @@ class alignas(32) Entry {
    * @return 必ず `true`
    */
   bool LookUpExact(std::int16_t depth16, MateLen len, PnDn& pn, PnDn& dn, bool& use_old_child) const noexcept {
-    if (len >= proven_len_) {
+    const MateLen16 len16{len};
+    if (len16 >= proven_len_) {
       pn = 0;
       dn = kInfinitePnDn;
-    } else if (len <= disproven_len_) {
+    } else if (len16 <= disproven_len_) {
       pn = kInfinitePnDn;
       dn = 0;
     } else {
@@ -445,7 +446,8 @@ class alignas(32) Entry {
    * @return pn/dn を更新したら `true`
    */
   bool LookUpSuperior(std::int16_t depth16, MateLen len, PnDn& pn, PnDn& dn, bool& use_old_child) const noexcept {
-    if (len >= proven_len_) {
+    const MateLen16 len16{len};
+    if (len16 >= proven_len_) {
       // 優等局面は高々 `proven_len_` 手詰み。
       pn = 0;
       dn = kInfinitePnDn;
@@ -474,8 +476,9 @@ class alignas(32) Entry {
    * @return pn/dn を更新したら `true`
    */
   bool LookUpInferior(std::int16_t depth16, MateLen len, PnDn& pn, PnDn& dn, bool& use_old_child) const noexcept {
+    const MateLen16 len16{len};
     // LookUpしたい局面は Entry に保存されている局面の劣等局面
-    if (len <= disproven_len_) {
+    if (len16 <= disproven_len_) {
       // 劣等局面は少なくとも `disproven_len_` 手不詰。
       pn = kInfinitePnDn;
       dn = 0;
@@ -506,8 +509,8 @@ class alignas(32) Entry {
   SearchAmount amount_;                ///< 現局面の探索量
   Key board_key_;                      ///< 盤面ハッシュ値
 
-  MateLen proven_len_;     ///< 詰み手数
-  MateLen disproven_len_;  ///< 不詰手数
+  MateLen16 proven_len_;     ///< 詰み手数
+  MateLen16 disproven_len_;  ///< 不詰手数
 
   PnDn pn_;  ///< pn値
   PnDn dn_;  ///< dn値
