@@ -321,6 +321,20 @@ class LocalExpansion {
     }
   }
 
+  /// デバッグ用
+  void DebugPrint() {
+    // print 中は割り込まれたくないので、最初と最後を sync_cout ~ sync_endl で囲む
+    sync_cout << "info string LocalExpansion DebugPrint\n";
+    std::cout << "info string multi_pv: " << multi_pv_ << "\n";
+    std::cout << "info string excluded_moves: " << excluded_moves_ << "\n";
+    for (const std::uint32_t i_raw : idx_) {
+      const auto& move = mp_[i_raw];
+      const auto& result = results_[i_raw];
+      std::cout << "info string move: " << move.move << " result: " << result << "\n";
+    }
+    std::cout << "info string -----------------" << sync_endl;
+  }
+
  private:
   // <PnDn>
   /// Pn を計算する
