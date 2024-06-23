@@ -312,6 +312,36 @@ inline std::string OrdinalNumber(Integer i) {
 }
 
 /**
+ * @brief デストラクタで与えられた関数を実行するクラス
+ */
+class Defer {
+ public:
+  /**
+   * @brief Construct a new Defer object
+   * @tparam F ファンクタ（`operator()` を持つ型）
+   * @param f デストラクタで実行する関数
+   */
+  template <typename F, Constraints<decltype(std::declval<F>()())> = nullptr>
+  explicit Defer(F&& f) : f_(std::forward<F>(f)) {}
+
+  Defer() = delete;
+  Defer(const Defer&) = delete;
+  Defer(Defer&&) = delete;
+  Defer& operator=(const Defer&) = delete;
+  Defer& operator=(Defer&&) = delete;
+
+  /// 与えられた関数を実行するデストラクタ
+  ~Defer() {
+    f_();
+    f_ = nullptr;
+  }
+
+ private:
+  /// デストラクタで実行する関数
+  std::function<void()> f_;
+};
+
+/**
  * @brief (OR node限定) `n` が不詰かどうかを簡易的に調べる。
  * @param n 現局面（OR node）
  * @return `true`: 不明

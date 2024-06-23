@@ -1,3 +1,4 @@
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "../typedefs.hpp"
@@ -137,6 +138,26 @@ TEST(OrdinalNumberTest, All) {
   EXPECT_EQ(OrdinalNumber(122), "122nd");
   EXPECT_EQ(OrdinalNumber(123), "123rd");
   EXPECT_EQ(OrdinalNumber(124), "124th");
+}
+
+TEST(DeferTest, All) {
+  using komori::Defer;
+  testing::MockFunction<void()> mock1;
+  testing::MockFunction<void()> mock2;
+  testing::MockFunction<void()> mock3;
+
+  {
+    testing::InSequence seq;
+    EXPECT_CALL(mock3, Call());
+    EXPECT_CALL(mock2, Call());
+    EXPECT_CALL(mock1, Call());
+  }
+
+  {
+    Defer d1{mock1.AsStdFunction()};
+    Defer d2{mock2.AsStdFunction()};
+    Defer d3{mock3.AsStdFunction()};
+  }
 }
 
 TEST(DoesHaveMatePossibilityTest, NoOurPiece) {
