@@ -43,7 +43,9 @@ class MateLenImpl : DefineNotEqualByEqual<MateLenImpl<T>>, DefineComparisonOpera
    * @tparam S  整数型
    * @param len 詰み（不詰）手数
    */
-  template <typename S>
+  template <typename S, Constraints<std::enable_if_t<!IsNarrowingConversion<S, T>::value>> = nullptr>
+  constexpr MateLenImpl(const MateLenImpl<S>& len) noexcept : len_plus_1_{len.len_plus_1_} {}
+  template <typename S, Constraints<std::enable_if_t<IsNarrowingConversion<S, T>::value>> = nullptr>
   constexpr explicit MateLenImpl(const MateLenImpl<S>& len) noexcept : len_plus_1_{static_cast<T>(len.len_plus_1_)} {}
   /// Default constructor(default)
   MateLenImpl() noexcept = default;

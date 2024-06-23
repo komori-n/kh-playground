@@ -136,12 +136,11 @@ class RepetitionTable {
    * @return `path_key` が保存されていればその深さと詰み手数、なければ `std::nullopt`
    */
   std::optional<std::pair<Depth, MateLen>> Contains(Key path_key, MateLen len) const {
-    const MateLen16 len16{len};
     const std::shared_lock lock(lock_);
     for (auto index = StartIndex(path_key); hash_table_[index].key != kEmptyKey; index = Next(index)) {
       const auto table_len = hash_table_[index].len16;
       // table_len が記録されている => 詰みまでには少なくとも table_len+1 手以上かかる
-      if (hash_table_[index].key == path_key && table_len >= len16) {
+      if (hash_table_[index].key == path_key && table_len >= len) {
         return std::make_pair(hash_table_[index].depth, MateLen{table_len});
       }
     }

@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <initializer_list>
+#include <type_traits>
 
 namespace komori {
 /**
@@ -18,6 +19,22 @@ template <typename T>
 struct Identity {
   using type = T;  ///< `T` をそのまま返す。
 };
+
+namespace detail {
+template <typename From, typename To, typename = void>
+struct IsNarrowingConversionImpl : std::true_type {};
+
+template <typename From, typename To>
+struct IsNarrowingConversionImpl<From, To, std::void_t<decltype(To{std::declval<From>()})>> : std::false_type {};
+}  // namespace detail
+
+/**
+ * @brief 型 `From` から型 `To` への縮小変換が行われるかどうかを判定するメタ関数。
+ * @tparam From 変換元
+ * @tparam To 変換先
+ */
+template <typename From, typename To>
+struct IsNarrowingConversion : detail::IsNarrowingConversionImpl<From, To>::type {};
 
 namespace detail {
 /**

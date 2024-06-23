@@ -282,7 +282,7 @@ class alignas(32) Entry {
    * @pre `len` > `disproven_len_`
    */
   void UpdateProven(MateLen len, SearchAmount amount) noexcept {
-    KOMORI_PRECONDITION(disproven_len_ < MateLen16{len});
+    KOMORI_PRECONDITION(disproven_len_ < len);
     proven_len_ = std::min(proven_len_, MateLen16{len});
     amount_ = std::max(amount_, SaturatedAdd(amount, len.Len() * detail::kFinalAmountBonus));
   }
@@ -295,7 +295,7 @@ class alignas(32) Entry {
    * @pre `len` < `proven_len_`
    */
   void UpdateDisproven(MateLen len, SearchAmount amount) noexcept {
-    KOMORI_PRECONDITION(MateLen16{len} < proven_len_);
+    KOMORI_PRECONDITION(len < proven_len_);
     disproven_len_ = std::max(disproven_len_, MateLen16{len});
     amount_ = std::max(amount_, SaturatedAdd(amount, len.Len() * detail::kFinalAmountBonus));
   }
@@ -411,11 +411,10 @@ class alignas(32) Entry {
    * @return 必ず `true`
    */
   bool LookUpExact(std::int16_t depth16, MateLen len, PnDn& pn, PnDn& dn, bool& use_old_child) const noexcept {
-    const MateLen16 len16{len};
-    if (len16 >= proven_len_) {
+    if (len >= proven_len_) {
       pn = 0;
       dn = kInfinitePnDn;
-    } else if (len16 <= disproven_len_) {
+    } else if (len <= disproven_len_) {
       pn = kInfinitePnDn;
       dn = 0;
     } else {
@@ -446,8 +445,7 @@ class alignas(32) Entry {
    * @return pn/dn を更新したら `true`
    */
   bool LookUpSuperior(std::int16_t depth16, MateLen len, PnDn& pn, PnDn& dn, bool& use_old_child) const noexcept {
-    const MateLen16 len16{len};
-    if (len16 >= proven_len_) {
+    if (len >= proven_len_) {
       // 優等局面は高々 `proven_len_` 手詰み。
       pn = 0;
       dn = kInfinitePnDn;
@@ -476,9 +474,8 @@ class alignas(32) Entry {
    * @return pn/dn を更新したら `true`
    */
   bool LookUpInferior(std::int16_t depth16, MateLen len, PnDn& pn, PnDn& dn, bool& use_old_child) const noexcept {
-    const MateLen16 len16{len};
     // LookUpしたい局面は Entry に保存されている局面の劣等局面
-    if (len16 <= disproven_len_) {
+    if (len <= disproven_len_) {
       // 劣等局面は少なくとも `disproven_len_` 手不詰。
       pn = kInfinitePnDn;
       dn = 0;
