@@ -125,10 +125,11 @@ void MainThread::search() {
 // 探索本体。並列化している場合、ここがslaveのエントリーポイント。
 void Thread::search() {
   komori::InitializeThread(id(), Threads.size());
-  const auto result = g_searcher.Search(rootPos, IsPosOrNode(rootPos));
-  g_searcher.Stop();
   if (id() == 0) {
+    const auto result = g_searcher.SearchMainThread(rootPos, IsPosOrNode(rootPos));
     g_search_result = result;
+  } else {
+    g_searcher.SearchSubThread(rootPos, IsPosOrNode(rootPos));
   }
 }
 

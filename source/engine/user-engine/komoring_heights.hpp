@@ -8,6 +8,7 @@
 
 #include "engine_option.hpp"
 #include "local_expansion.hpp"
+#include "mate_len.hpp"
 #include "move_path.hpp"
 #include "pv_list.hpp"
 #include "score.hpp"
@@ -63,12 +64,19 @@ class KomoringHeights {
   void NewSearch(const Position& n, bool is_root_or_node);
 
   /**
-   * @brief 詰め探索を行う。（探索本体）
+   * @brief 詰め探索を行う（メインスレッド）
    * @param n 現局面
    * @param is_root_or_node `n` が OR node かどうか
    * @return 探索結果
    */
-  NodeState Search(const Position& n, bool is_root_or_node);
+  NodeState SearchMainThread(const Position& n, bool is_root_or_node);
+  /**
+   * @brief 詰め探索を行う（メインスレッド以外）
+   * @param n 現局面
+   * @param is_root_or_node `n` が OR node かどうか
+   * @return 探索結果
+   */
+  NodeState SearchSubThread(const Position& n, bool is_root_or_node);
 
  private:
   /**
@@ -82,7 +90,13 @@ class KomoringHeights {
    */
   std::pair<NodeState, MateLen> SearchMainLoop(Node& n);
 
-  SearchResult FirstSearch(Node& n);
+  /**
+   * @brief 局面 `n` が `len` 手以下で詰むかどうかを探索する
+   * @param n 現局面
+   * @param len 詰み手数
+   * @return 探索結果
+   */
+  SearchResult SearchEntry(Node& n, MateLen len);
 
   /**
    * @brief `n` に対し `mate_len` 手以下の詰み手順を `mate_path` に格納する
@@ -93,17 +107,6 @@ class KomoringHeights {
    * @return 探索結果
    */
   SearchResult ConstructPv(Node& n, MateLen max_len, MovePath& move_path);
-
-  /**
-   * @brief `n` が `len` 手以下で詰むかを探索する
-   * @param n 現局面
-   * @param len 詰み手数
-   * @return 探索結果
-   *
-   * `SearchImpl()` による再帰探索のエントリポイント。しきい値をいい感じに変化させることで探索の途中経過を
-   * 標準出力に出しながら探索を進めることができる。
-   */
-  SearchResult SearchEntry(Node& n, MateLen len);
 
   /**
    * @brief 詰め探索の本体。（再帰関数）
@@ -129,7 +132,13 @@ class KomoringHeights {
 
   tt::TranspositionTable tt_;  ///< 置換表
   EngineOption option_;        ///< エンジンオプション
-  Barrier barrier_;            ///< スレッドの同期用バリア
+  /// スレッド同期用バリア。await-a と await-b の 2 つのフェーズがある。
+  /// await-a ~ await-b: 探索中。各スレッドは moves_from_root_ と mate_len_ で指定された局面を探索する
+  ///                    探索が終わったら monitor_.Stop() を呼んですべてのスレッドを停止させる
+  /// await-b ~ await-a: 探索準備。メインスレッドが次に探索すべき局面を準備する。
+  ///                    それ以外のスレッドはただ待つだけ。
+  ///                    この区間はメインスレッド以外は停止しているので、特にメンバ変数の排他を取る必要はない。
+  Barrier barrier_;
 
   SearchMonitor monitor_;  ///< 探索モニター
 
@@ -138,6 +147,11 @@ class KomoringHeights {
   Score score_{};  ///< 現在の探索評価値。余詰探索中に CurrentInfo() で取得できるようにここにおいておく
 
   PvList pv_list_;  ///< 各手に対する PV の一覧
+
+  std::atomic<bool> should_break_main_loop_{false};  ///< メインループを抜けるかどうか
+  std::vector<Move> moves_from_root_;                ///< 探索開始局面
+  MateLen mate_len_{kZeroMateLen};                   ///< 探索手数
+  std::vector<SearchResult> search_results_;         ///< 各スレッドの探索結果
 };
 }  // namespace komori
 

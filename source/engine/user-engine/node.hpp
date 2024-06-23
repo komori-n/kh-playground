@@ -217,17 +217,17 @@ class Node {
   Key path_key_{};                               ///< 経路ハッシュ値。差分計算により求める。
 };
 
-/// 局面 n から moves で手を一気に進める。nに対し、moves の前から順に n.DoMove(m) を適用する。
+/// 局面 n から moves で手を一気に進める。nに対し、moves の前から順に n.DoMoveNoRepetition(m) を適用する。
 inline void RollForward(Node& n, const std::vector<Move>& moves) {
   for (const auto& move : moves) {
-    n.DoMove(move);
+    n.DoMoveNoRepetition(move);
   }
 }
 
-/// 局面 n から moves で手を一気に戻す。n に対し、moves の後ろから順に n.UndoMove(m) を適用する。
+/// 局面 n から moves で手を一気に戻す。n に対し、moves の後ろから順に n.UndoMoveNoRepetition(m) を適用する。
 inline void RollBack(Node& n, const std::vector<Move>& moves) {
   for (auto itr = moves.crbegin(); itr != moves.crend(); ++itr) {
-    n.UndoMove();
+    n.UndoMoveNoRepetition();
   }
 }
 

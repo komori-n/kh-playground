@@ -3,6 +3,7 @@
 #include "../../usi.h"
 #include "local_expansion.hpp"
 #include "mate_len.hpp"
+#include "node.hpp"
 #include "score.hpp"
 #include "search_result.hpp"
 #include "typedefs.hpp"
@@ -82,91 +83,95 @@ void KomoringHeights::NewSearch(const Position& n, bool is_root_or_node) {
   if (tt_.Hashfull() >= kExecuteGcHashfullThreshold) {
     tt_.Clear();
   }
+
+  moves_from_root_.clear();
+  mate_len_ = kDepthMaxMateLen;
+  should_break_main_loop_.store(false, std::memory_order_relaxed);
+  search_results_.resize(option_.threads);
+  search_results_.shrink_to_fit();
 }
 
-NodeState KomoringHeights::Search(const Position& n, bool is_root_or_node) {
+NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_node) {
   auto& nn = const_cast<Position&>(n);
   Node node{nn, is_root_or_node};
 
-  auto [state, len] = SearchMainLoop(node);
+  // ひとまず開始局面を探索する
+  barrier_.Await();  // await-a
+  SearchResult result = SearchEntry(node, kDepthMaxMateLen);
+  monitor_.Stop();
+  barrier_.Await();      // await-b
+  monitor_.ResetStop();  // stopフラグが立っているのでリセット
 
-#if defined(USE_TT_SAVE_AND_LOAD)
-  const auto tt_write_path = option_.tt_write_path;
-  if (!tt_write_path.empty()) {
-    std::ofstream ofs(tt_write_path, std::ios::binary);
-    if (ofs) {
-      sync_cout << "info string save_path: " << tt_write_path << sync_endl;
-      tt_.Save(ofs);
-    }
-  }
-#endif  // defined(USE_TT_SAVE_AND_LOAD)
-
-  if (tl_thread_id == 0 && state == NodeState::kProven) {
-    if (best_moves_.size() % 2 != static_cast<int>(is_root_or_node)) {
-      sync_cout << "info string Failed to detect PV" << sync_endl;
+  // 全スレッドの探索結果をマージする
+  const SearchResultComparer comparer{node.IsOrNode()};
+  for (int i = 1; i < option_.threads; ++i) {
+    if (search_results_[i].IsFinal() && comparer(search_results_[i], result) == SearchResultComparer::Ordering::kLess) {
+      result = search_results_[i];
     }
   }
 
-  return state;
-}
-
-std::pair<NodeState, MateLen> KomoringHeights::SearchMainLoop(Node& n) {
-  if (option_.multi_pv > 1) {
-    sync_cout << "info string multi_pv is not supported" << sync_endl;
-    return {NodeState::kUnknown, kZeroMateLen};
-  }
-
-  const std::size_t multi_pv = option_.multi_pv;
-  for (std::size_t i = 0; i < multi_pv; ++i) {
-    SearchResult result = FirstSearch(n);
+  sync_cout << CurrentInfo() << result << sync_endl;
+  if (result.Pn() == 0) {
+    // pv作成
     MovePath path{};
 
-    barrier_.Await();
-    if (tl_thread_id == 0) {
-      score_ = Score::Make(option_.score_method, result, n.IsRootOrNode());
-      if (result.Pn() == 0) {
-        // pv作成
-        sync_cout << CurrentInfo() << result << sync_endl;
-        result = ConstructPv(n, result.Len(), path);
+    result = ConstructPv(node, result.Len(), path);
+    score_ = Score::Make(option_.score_method, result, node.IsRootOrNode());
 
-        score_ = Score::Make(option_.score_method, result, n.IsRootOrNode());
-        UsiInfo info = CurrentInfo();
-        info.PushPVBack(0, score_.ToString(), path.ToString());
-        sync_cout << info << sync_endl;
+    UsiInfo info = CurrentInfo();
+    info.PushPVBack(0, score_.ToString(), path.ToString());
+    sync_cout << info << sync_endl;
 
-        best_moves_ = path.Moves();
-      } else if (result.Dn() == 0) {
-        // 回避手を探す (TBD)
-      }
-    }
-
-    barrier_.Await();
-
-    return {result.GetNodeState(), result.Len()};
+    best_moves_ = path.Moves();
   }
 
-  return {NodeState::kUnknown, kZeroMateLen};
+  // 待機している sub thread を解放する
+  should_break_main_loop_ = true;
+  barrier_.Await();  // await-a
+
+  return result.GetNodeState();
 }
 
-SearchResult KomoringHeights::FirstSearch(Node& n) {
-  expansion_list_[tl_thread_id].Emplace(tt_, n, kDepthMaxMateLen, true, option_.multi_pv);
+NodeState KomoringHeights::SearchSubThread(const Position& n, bool is_root_or_node) {
+  auto& nn = const_cast<Position&>(n);
+  Node node{nn, is_root_or_node};
+
+  barrier_.Await();  // await-a
+  while (!should_break_main_loop_) {
+    // 探索本体
+    // await-a ~ await-b の区間は moves_from_root_ と mate_len_ は読み取り専用なので、排他を取る必要はない
+    RollForward(node, moves_from_root_);
+    const SearchResult result = SearchEntry(node, mate_len_);
+    search_results_[tl_thread_id] = result;
+
+    RollBack(node, moves_from_root_);
+    monitor_.Stop();
+    barrier_.Await();  // await-b
+    barrier_.Await();  // await-a
+  }
+
+  return NodeState::kUnknown;
+}
+
+SearchResult KomoringHeights::SearchEntry(Node& n, MateLen len) {
+  expansion_list_[tl_thread_id].Emplace(tt_, n, len, true, option_.multi_pv, len != kDepthMaxMateLen);
 
   PnDn thpn = (tl_thread_id + 1) * kPnDnUnit;
   PnDn thdn = (tl_thread_id + 1) * kPnDnUnit;
   SearchResult result;
-  while (!monitor_.ShouldStop() && thpn <= kInfinitePnDn && thdn <= kInfinitePnDn) {
+  do {
     std::uint32_t inc_flag = 0;
     result = SearchImpl(n, thpn, thdn, kDepthMaxMateLen, inc_flag);
     if (result.IsFinal()) {
       break;
     }
 
-    if (tl_thread_id == 0) {
+    if (tl_thread_id == 0 && !score_.IsFinal()) {
       score_ = Score::Make(option_.score_method, result, n.IsRootOrNode());
     }
 
     std::tie(thpn, thdn) = NextPnDnThresholds(result.Pn(), result.Dn(), thpn, thdn);
-  }
+  } while (!monitor_.ShouldStop() && thpn <= kInfinitePnDn && thdn <= kInfinitePnDn);
 
   expansion_list_[tl_thread_id].Pop();
   return result;
@@ -182,14 +187,26 @@ SearchResult KomoringHeights::ConstructPv(Node& n, MateLen max_len, MovePath& mo
   SearchResult result = local_expansion.CurrentResult(n);
   while (!result.IsFinal() && !monitor_.ShouldStop()) {
     // mate_len 以下の詰みがあるはずなので頑張って探す
+    // sub thread たちにも `moves_from_root_` 以下 `mate_len_` 手詰めを見つけるのを手伝ってもらう
+    moves_from_root_ = move_path.Moves();
+    mate_len_ = max_len;
+    barrier_.Await();  // await-a
+
+    // expansion 済なので、SearchEntryではなく SearchImpl を呼ぶ
     std::uint32_t inc_flag = 0;
-    SearchImpl(n, kInfinitePnDn, kInfinitePnDn, max_len, inc_flag);
-    result = local_expansion.CurrentResult(n);
+    result = SearchImpl(n, kInfinitePnDn, kInfinitePnDn, max_len, inc_flag);
+    monitor_.Stop();
+    barrier_.Await();  // await-b
+    monitor_.ResetStop();
+
+    // sub thread の結果を result にコピーすることもできるが、メインスレッドの local expansion の状態が
+    // 狂ってしまうので、あえて何もしない
   }
 
   if (result.Dn() == 0) {
     // mate_len 以下の詰みがあるはずなので、ここに到達するのはおかしい
-    sync_cout << n.Pos() << sync_endl;
+    n.UndoMoveNoRepetition();
+    sync_cout << n.GetDepth() << " " << n.Pos() << sync_endl;
     sync_cout << "info string unexpected disproven: " << result << sync_endl;
     std::terminate();
   }

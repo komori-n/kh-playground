@@ -68,6 +68,10 @@ class SearchMonitor {
   }
 
   void Stop() { stop_.store(true, std::memory_order_release); }
+  void ResetStop() {
+    const auto elapsed = Time.elapsed_from_ponderhit();
+    stop_.store(MoveCount() >= move_limit_ || elapsed >= time_limit_ || Threads.stop, std::memory_order_release);
+  }
 
   /**
    * @brief 深さ `depth` の局面に訪れたことを報告する

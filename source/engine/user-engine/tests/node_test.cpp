@@ -132,13 +132,11 @@ TEST(NodeTest, RollForward) {
                    make_move_drop(GOLD, SQ_48, WHITE), make_move(SQ_39, SQ_48, B_KING)});
 
   EXPECT_EQ(n->BoardKey(), board_key);
-  EXPECT_TRUE(n->IsRepetitionOrInferior());
 
   RollBack(*n, {make_move_drop(BISHOP, SQ_39, WHITE), make_move(SQ_48, SQ_39, B_KING),
                 make_move_drop(GOLD, SQ_48, WHITE), make_move(SQ_39, SQ_48, B_KING)});
 
   EXPECT_EQ(n->BoardKey(), board_key);
-  EXPECT_FALSE(n->IsRepetitionOrInferior());
 }
 
 TEST(CheckMate1PlyTest, Mate) {
