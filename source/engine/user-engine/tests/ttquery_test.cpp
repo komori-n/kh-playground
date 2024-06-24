@@ -72,7 +72,7 @@ TEST_F(QueryTest, LoopUp_UnknownExact) {
 }
 
 TEST_F(QueryTest, LoopUp_UnknownExactRepetition) {
-  rep_table_.Insert(path_key_, depth_ - 4, komori::MateLen::DepthMax());
+  rep_table_.Insert(path_key_, depth_ - 4);
 
   const PnDn pn{33};
   const PnDn dn{4};
@@ -87,7 +87,7 @@ TEST_F(QueryTest, LoopUp_UnknownExactRepetition) {
   EXPECT_EQ(result.Pn(), kInfinitePnDn);
   EXPECT_EQ(result.Dn(), 0);
   EXPECT_EQ(result.Amount(), entries_[0].Amount());
-  EXPECT_EQ(result.Len(), komori::MateLen::DepthMax());
+  EXPECT_EQ(result.Len(), komori::MateLen{334});
   EXPECT_EQ(result.GetFinalData().repetition_start, depth_ - 4);
 }
 
@@ -193,14 +193,14 @@ TEST_F(QueryTest, LoopUp_Proven) {
 TEST_F(QueryTest, LoopUp_Disproven) {
   const auto hand = MakeHand<PAWN, LANCE, LANCE, LANCE>();
   entries_[0].Init(board_key_, hand);
-  entries_[0].UpdateDisproven(MateLen{3340}, 1);
+  entries_[0].UpdateDisproven(1);
 
   bool does_have_old_child{false};
   const auto result = query_.LookUp(does_have_old_child, MateLen{334}, kDefaultInitialEvalFunc);
 
   EXPECT_EQ(result.Pn(), kInfinitePnDn);
   EXPECT_EQ(result.Dn(), 0);
-  EXPECT_EQ(result.Len(), MateLen{3340});
+  EXPECT_EQ(result.Len(), MateLen{334});
   EXPECT_EQ(result.Amount(), entries_[0].Amount());
   EXPECT_EQ(result.GetFinalData().hand, hand);
 }
@@ -254,25 +254,6 @@ TEST_F(QueryTest, SetResult_ProvenUpdate) {
   EXPECT_EQ(entries_[0].ProvenLen(), len);
 }
 
-TEST_F(QueryTest, SetResult_DisprovenNew) {
-  const auto hand = MakeHand<PAWN, LANCE, LANCE, GOLD>();
-  const MateLen len = MateLen{334};
-  const SearchResult result = SearchResult::MakeFinal<false>(hand, len, 1);
-
-  query_.SetResult(result);
-  EXPECT_EQ(entries_[0].DisprovenLen(), len);
-}
-
-TEST_F(QueryTest, SetResult_DisprovenUpdate) {
-  const auto hand = MakeHand<PAWN, LANCE, LANCE, GOLD>();
-  const MateLen len = MateLen{334};
-  const SearchResult result = SearchResult::MakeFinal<false>(hand, len, 1);
-
-  entries_[0].Init(board_key_, hand);
-  query_.SetResult(result);
-  EXPECT_EQ(entries_[0].DisprovenLen(), len);
-}
-
 TEST_F(QueryTest, SetResult_RepetitionNew) {
   const SearchAmount amount{334};
   const SearchResult result = SearchResult::MakeRepetition(hand_, MateLen{334}, amount, 0);
@@ -281,7 +262,7 @@ TEST_F(QueryTest, SetResult_RepetitionNew) {
   EXPECT_EQ(entries_[0].Pn(), 1);
   EXPECT_EQ(entries_[0].Dn(), 1);
   EXPECT_EQ(entries_[0].Amount(), 1);
-  EXPECT_TRUE(rep_table_.Contains(path_key_, MateLen{334}));
+  EXPECT_TRUE(rep_table_.Contains(path_key_));
 }
 
 TEST_F(QueryTest, SetResult_RepetitionUpdate) {
@@ -293,5 +274,5 @@ TEST_F(QueryTest, SetResult_RepetitionUpdate) {
   EXPECT_EQ(entries_[2].Pn(), 1);
   EXPECT_EQ(entries_[2].Dn(), 1);
   EXPECT_EQ(entries_[2].Amount(), 1);
-  EXPECT_TRUE(rep_table_.Contains(path_key_, MateLen{334}));
+  EXPECT_TRUE(rep_table_.Contains(path_key_));
 }

@@ -29,7 +29,7 @@ constexpr inline SearchAmount kFinalAmountBonus{100};
  *
  * 他のクラスよりも可読性を犠牲にしているため、普段よりも仕様を詳細に記す。
  *
- * `Entry` は以下のように 40 bytes で構成されている。
+ * `Entry` は以下のように 28 bytes で構成されている。
  *
  * ```
  *                       1      2      3      4      5      6      7      8
@@ -38,9 +38,9 @@ constexpr inline SearchAmount kFinalAmountBonus{100};
  *                    +------+------+------+------+------+------+------+------+
  *                  8 |                      board_key_                       |
  *                    +------+------+------+------+------+------+------+------+
- *                 16 |        proven_len_        |       disproven_len_      |
+ *                 16 |        proven_len_        |     pn_     |     dn_     |
  *                    +------+------+------+------+------+------+------+------+
- *                 24 |     pn_     |     dn_     | lock | rep  | min_depth_  |
+ *                 24 | lock | rep  | min_depth_  |
  *                    +------+------+------+------+------+------+------+------+
  * ```
  *
@@ -90,19 +90,12 @@ constexpr inline SearchAmount kFinalAmountBonus{100};
  * `Init()` 直後は「千日手可能性フラグ」は立っていない。明示的に `SetPossibleRepetition()` をコールすることでのみ
  * 千日手フラグを立てることができる。千日手フラグは `IsPossibleRepetition()` により取得できる。
  *
- * ### 詰み／不詰の保存方法
+ * ### 詰みの保存方法
  *
- * 余詰探索で「n手詰以下 m手詰み以上」という状態を扱いたいので、詰み、不詰、探索中情報を同時に持てるようにする。
- * すなわち、単純に pn/dn を持つのに加え、詰みの上界 `proven_len_` と不詰の下界 `disproven_len_` を保持する。これは、
- * 例えばn手以下の詰みだと分かっている局面において、さらに探索を延長して n-1 手以下で詰まないことを示す際に用いる。
+ * 「n手詰以下」という状態を扱いたいので、詰みと探索中情報を同時に持てるようにする。
+ * すなわち、単純に pn/dn を持つのに加え、詰みの上界 `proven_len_` を保持する。
  *
- * 整理すると、以下のようになる。
- *
- * - `proven_len_` 手以上：詰み
- * - `disproven_len_` 手より大きく `proven_len_` 手未満：不明（探索中）
- * - `disproven_len_` 手以下：不詰
- *
- * `Init()` 直後は、-1手不詰、+∞手詰みで初期化する。こうすることで、任意の非負有限手に対し不明（探索中）の状態に
+ * `Init()` 直後は、+∞手詰みで初期化する。こうすることで、任意の非負有限手に対し不明（探索中）の状態に
  * 設定できる。
  *
  * ### Look Up
@@ -145,7 +138,6 @@ class alignas(32) Entry {
         amount_{entry.amount_},
         board_key_{entry.board_key_},
         proven_len_{entry.proven_len_},
-        disproven_len_{entry.disproven_len_},
         pn_{entry.pn_},
         dn_{entry.dn_},
         repetition_state_{entry.repetition_state_},
@@ -160,7 +152,6 @@ class alignas(32) Entry {
     amount_ = entry.amount_;
     board_key_ = entry.board_key_;
     proven_len_ = entry.proven_len_;
-    disproven_len_ = entry.disproven_len_;
     pn_ = entry.pn_;
     dn_ = entry.dn_;
     repetition_state_ = entry.repetition_state_;
@@ -181,7 +172,6 @@ class alignas(32) Entry {
     amount_ = 1;
     board_key_ = board_key;
     proven_len_ = MateLen16::Max();
-    disproven_len_ = MateLen16::Min();
 
     pn_ = 1;
     dn_ = 1;
@@ -279,25 +269,20 @@ class alignas(32) Entry {
    * @param len       詰み手数
    * @param amount    探索量
    * @pre `IsFor(board_key, hand)` （`board_key`, `hand` は現局面の盤面ハッシュ、持ち駒）
-   * @pre `len` > `disproven_len_`
    */
   void UpdateProven(MateLen len, SearchAmount amount) noexcept {
-    KOMORI_PRECONDITION(disproven_len_ < len);
     proven_len_ = std::min(proven_len_, MateLen16{len});
     amount_ = std::max(amount_, SaturatedAdd(amount, len.Len() * detail::kFinalAmountBonus));
   }
 
   /**
    * @brief 探索結果を書き込む（不詰局面）
-   * @param len       不詰手数
-   * @param amount    探索量
-   * @pre `IsFor(board_key, hand)` （`board_key`, `hand` は現局面の盤面ハッシュ、持ち駒）
-   * @pre `len` < `proven_len_`
+   * @param amount 探索量
    */
-  void UpdateDisproven(MateLen len, SearchAmount amount) noexcept {
-    KOMORI_PRECONDITION(len < proven_len_);
-    disproven_len_ = std::max(disproven_len_, MateLen16{len});
-    amount_ = std::max(amount_, SaturatedAdd(amount, len.Len() * detail::kFinalAmountBonus));
+  void UpdateDisproven(SearchAmount amount) noexcept {
+    dn_ = 0;
+    pn_ = kInfinitePnDn;
+    amount_ = std::max(amount_, SaturatedAdd(amount, 10 * detail::kFinalAmountBonus));
   }
 
   /**
@@ -374,17 +359,6 @@ class alignas(32) Entry {
     return false;
   }
 
-  bool UpdateDisprovenLen(Hand hand, MateLen& disproven_len) const noexcept {
-    const Hand entry_hand = hand_.load(std::memory_order_relaxed);
-    const bool is_inferior = hand_is_equal_or_superior(entry_hand, hand);
-    if (is_inferior && disproven_len < MateLen{disproven_len_}) {
-      disproven_len = MateLen{disproven_len_};
-      return true;
-    }
-
-    return false;
-  }
-
   // <テスト用>
   // UpdateXxx() や LookUp() など、外部から変数が観測できないとテストの際にかなり不便なので、Getter を用意しておく。
 
@@ -392,8 +366,6 @@ class alignas(32) Entry {
   Depth MinDepth() const noexcept { return static_cast<Depth>(min_depth_.load(std::memory_order_relaxed)); }
   /// 詰み手数
   MateLen ProvenLen() const noexcept { return MateLen{proven_len_}; }
-  /// 不詰手数
-  MateLen DisprovenLen() const noexcept { return MateLen{disproven_len_}; }
   /// pn
   PnDn Pn() const noexcept { return pn_; }
   /// dn
@@ -411,12 +383,12 @@ class alignas(32) Entry {
    * @return 必ず `true`
    */
   bool LookUpExact(std::int16_t depth16, MateLen len, PnDn& pn, PnDn& dn, bool& use_old_child) const noexcept {
-    if (len >= proven_len_) {
-      pn = 0;
-      dn = kInfinitePnDn;
-    } else if (len <= disproven_len_) {
+    if (dn_ == 0) {
       pn = kInfinitePnDn;
       dn = 0;
+    } else if (len >= proven_len_) {
+      pn = 0;
+      dn = kInfinitePnDn;
     } else {
       const auto min_depth = min_depth_.load(std::memory_order_relaxed);
       if (depth16 < min_depth) {
@@ -473,10 +445,9 @@ class alignas(32) Entry {
    * @param use_old_child unproven old childフラグ
    * @return pn/dn を更新したら `true`
    */
-  bool LookUpInferior(std::int16_t depth16, MateLen len, PnDn& pn, PnDn& dn, bool& use_old_child) const noexcept {
+  bool LookUpInferior(std::int16_t depth16, MateLen, PnDn& pn, PnDn& dn, bool& use_old_child) const noexcept {
     // LookUpしたい局面は Entry に保存されている局面の劣等局面
-    if (len <= disproven_len_) {
-      // 劣等局面は少なくとも `disproven_len_` 手不詰。
+    if (dn_ == 0) {
       pn = kInfinitePnDn;
       dn = 0;
       return true;
@@ -506,8 +477,7 @@ class alignas(32) Entry {
   SearchAmount amount_;                ///< 現局面の探索量
   Key board_key_;                      ///< 盤面ハッシュ値
 
-  MateLen16 proven_len_;     ///< 詰み手数
-  MateLen16 disproven_len_;  ///< 不詰手数
+  MateLen16 proven_len_;  ///< 詰み手数
 
   PnDn pn_;  ///< pn値
   PnDn dn_;  ///< dn値

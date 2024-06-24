@@ -121,22 +121,11 @@ class Query {
             }
             return SearchResult::MakeFinal<true>(proof_hand, proven_len, amount);
           } else if (dn == 0) {
-            Hand disproof_hand = itr->GetHand();
-            MateLen disproven_len = itr->DisprovenLen();
-            if (strict_lookup) {
-              for (auto itr2 = ++itr; !itr2->IsNull(); ++itr2) {
-                std::shared_lock lock2{*itr2};
-                if (itr2->IsFor(board_key_) && itr2->UpdateDisprovenLen(hand_, disproven_len)) {
-                  disproof_hand = itr2->GetHand();
-                }
-              }
-            }
-            return SearchResult::MakeFinal<false>(disproof_hand, disproven_len, amount);
+            return SearchResult::MakeFinal<false>(itr->GetHand(), len, amount);
           } else if (itr->GetHand() == hand_) {
             if (itr->IsPossibleRepetition()) {
-              if (const auto opt = rep_table_->Contains(path_key_, len)) {
-                const auto [depth, table_len] = opt.value();
-                return SearchResult::MakeRepetition(hand_, table_len, amount, depth);
+              if (const auto maybe_depth = rep_table_->Contains(path_key_)) {
+                return SearchResult::MakeRepetition(hand_, len, amount, *maybe_depth);
               }
             }
 
@@ -242,7 +231,7 @@ class Query {
     if constexpr (kIsProven) {
       entry->UpdateProven(len, amount);
     } else {
-      entry->UpdateDisproven(len, amount);
+      entry->UpdateDisproven(amount);
     }
     entry->unlock();
   }
@@ -256,7 +245,7 @@ class Query {
 
     entry->SetPossibleRepetition();
     entry->unlock();
-    rep_table_->Insert(path_key_, result.GetFinalData().repetition_start, result.Len());
+    rep_table_->Insert(path_key_, result.GetFinalData().repetition_start);
   }
 
   /**

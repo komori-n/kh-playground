@@ -222,7 +222,6 @@ TEST(EntryTest, LookUp_PnDn_Disproven) {
   Entry entry;
   const Hand hand1{MakeHand<PAWN, LANCE, LANCE>()};
   const Hand hand2{MakeHand<LANCE>()};
-  const MateLen len1{334};
   const MateLen len2{264};
   const Depth depth{334};
   PnDn pn{1}, dn{1};
@@ -230,7 +229,7 @@ TEST(EntryTest, LookUp_PnDn_Disproven) {
   bool use_old_child{false};
 
   entry.Init(0x264, hand1);
-  entry.UpdateDisproven(len1, 1);
+  entry.UpdateDisproven(1);
   const auto ret = entry.LookUp(hand1, depth, len, pn, dn, use_old_child);
   EXPECT_TRUE(ret);
   EXPECT_EQ(pn, komori::kInfinitePnDn);
@@ -272,28 +271,6 @@ TEST(EntryTest, UpdateProven_ProvenLen) {
 
   entry.UpdateProven(len3, 1);
   EXPECT_EQ(entry.ProvenLen(), len3);
-}
-
-TEST(EntryTest, Init_DisprovenLen) {
-  Entry entry;
-  entry.Init(0x264, HAND_ZERO);
-  EXPECT_EQ(entry.DisprovenLen(), MateLen::Min());
-}
-
-TEST(EntryTest, UpdateProven_DisprovenLen) {
-  Entry entry;
-  const MateLen len1{334};
-  const MateLen len2{264};
-  const MateLen len3{3340};
-  entry.Init(0x264, HAND_ZERO);
-  entry.UpdateDisproven(len1, 1);
-  EXPECT_EQ(entry.DisprovenLen(), len1);
-
-  entry.UpdateDisproven(len2, 1);
-  EXPECT_EQ(entry.DisprovenLen(), len1);
-
-  entry.UpdateDisproven(len3, 1);
-  EXPECT_EQ(entry.DisprovenLen(), len3);
 }
 
 TEST(EntryTest, LookUp_UseOldChild_Superior) {
@@ -370,6 +347,6 @@ TEST(EntryTest, UpdateDisproven_Amount) {
   const SearchAmount amount2{264};
   entry.Init(0x264, HAND_ZERO);
   entry.UpdateUnknown(264, 26, 4, amount1);
-  entry.UpdateDisproven(MateLen{334}, amount2);
-  EXPECT_EQ(entry.Amount(), amount2 + 334 * kFinalAmountBonus);
+  entry.UpdateDisproven(amount2);
+  EXPECT_EQ(entry.Amount(), amount2 + 10 * kFinalAmountBonus);
 }

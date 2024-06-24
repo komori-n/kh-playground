@@ -36,7 +36,6 @@ class RepetitionTable {
   struct TableEntry {
     Key key;                ///< 経路ハッシュ値。使用していないなら kEmptyKey。
     Depth depth;            ///< 探索深さ
-    MateLen16 len16;        ///< 不詰手数
     Generation generation;  ///< 置換表世代
   };
   static_assert(sizeof(TableEntry) == 16);
@@ -69,7 +68,7 @@ class RepetitionTable {
     next_generation_update_ = entries_per_generation_;
     next_gc_ = kInitialGcDuration;
 
-    const TableEntry initial_entry{kEmptyKey, 0, MateLen16::Min(), 0};
+    const TableEntry initial_entry{kEmptyKey, 0, 0};
     std::fill(hash_table_.begin(), hash_table_.end(), initial_entry);
   }
 
@@ -95,11 +94,8 @@ class RepetitionTable {
    * @brief 経路ハッシュ値 `path_key` に千日手判定開始深さ `depth` を設定する
    * @param path_key 経路ハッシュ値
    * @param depth    千日手判定開始深さ
-   * @param len      詰み手数
    */
-  void Insert(Key path_key, Depth depth, MateLen len) {
-    const MateLen16 len16{len};
-
+  void Insert(Key path_key, Depth depth) {
     const std::lock_guard lock(lock_);
     auto index = StartIndex(path_key);
     while (hash_table_[index].key != kEmptyKey && hash_table_[index].key != path_key) {
@@ -107,7 +103,7 @@ class RepetitionTable {
     }
 
     if (hash_table_[index].key == kEmptyKey) {
-      hash_table_[index] = TableEntry{path_key, depth, len16, generation_};
+      hash_table_[index] = TableEntry{path_key, depth, generation_};
       entry_count_++;
       if (entry_count_ >= next_generation_update_) {
         generation_++;
@@ -118,11 +114,7 @@ class RepetitionTable {
         }
       }
     } else {
-      if (len16 != hash_table_[index].len16) {
-        hash_table_[index].depth = depth;
-        hash_table_[index].len16 = len16;
-        hash_table_[index].generation = generation_;
-      } else if (hash_table_[index].depth <= depth) {
+      if (hash_table_[index].depth <= depth) {
         hash_table_[index].depth = depth;
         hash_table_[index].generation = generation_;
       }
@@ -132,16 +124,14 @@ class RepetitionTable {
   /**
    * @brief 経路ハッシュ値 `path_key` が保存されているかどうか判定する。
    * @param path_key 経路ハッシュ値
-   * @param len      残り手数
    * @return `path_key` が保存されていればその深さと詰み手数、なければ `std::nullopt`
    */
-  std::optional<std::pair<Depth, MateLen>> Contains(Key path_key, MateLen len) const {
+  std::optional<Depth> Contains(Key path_key) const {
     const std::shared_lock lock(lock_);
     for (auto index = StartIndex(path_key); hash_table_[index].key != kEmptyKey; index = Next(index)) {
-      const auto table_len = hash_table_[index].len16;
       // table_len が記録されている => 詰みまでには少なくとも table_len+1 手以上かかる
-      if (hash_table_[index].key == path_key && table_len >= len) {
-        return std::make_pair(hash_table_[index].depth, MateLen{table_len});
+      if (hash_table_[index].key == path_key) {
+        return hash_table_[index].depth;
       }
     }
 
