@@ -180,8 +180,8 @@ class alignas(32) Entry {
     hand_.store(hand, std::memory_order_relaxed);
     amount_ = 1;
     board_key_ = board_key;
-    proven_len_ = kDepthMaxPlus1MateLen16;
-    disproven_len_ = kMinus1MateLen16;
+    proven_len_ = MateLen16::Max();
+    disproven_len_ = MateLen16::Min();
 
     pn_ = 1;
     dn_ = 1;

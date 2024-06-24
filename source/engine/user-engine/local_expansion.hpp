@@ -41,7 +41,7 @@ inline std::optional<SearchResult> CheckObviousFinalAfter(const Position& n, Mov
     const Hand hand = RemoveIfHandGivesOtherChecks(pos, curr_hand);
 
     pos.undo_move(move);
-    return SearchResult::MakeFinal<false>(hand, kDepthMaxMateLen, 1);
+    return SearchResult::MakeFinal<false>(hand, MateLen::DepthMax(), 1);
   } else if (auto [best_move, proof_hand] = CheckMate1Ply(pos); proof_hand != kNullHand) {
     pos.undo_move(move);
     return SearchResult::MakeFinal<true>(proof_hand, MateLen{1}, 1);
@@ -494,7 +494,7 @@ class LocalExpansion {
     } else {
       SplittedHand splitted_hand = SplittedHand::Zero();
       // 子局面の証明駒の極大集合を計算する
-      MateLen mate_len = kMinus1MateLen;
+      MateLen mate_len = MateLen::Minus1();
       SearchAmount amount = 1;
       for (const auto i_raw : idx_) {
         const auto& result = results_[i_raw];

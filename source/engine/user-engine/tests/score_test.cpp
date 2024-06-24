@@ -2,7 +2,6 @@
 
 #include "../score.hpp"
 
-using komori::kDepthMaxMateLen;
 using komori::kNullKey;
 using komori::MateLen;
 using komori::Score;
@@ -22,7 +21,7 @@ TEST(ScoreTest, MakeProven) {
 
 TEST(ScoreTest, MakeUnknown_None) {
   const ScoreMaker maker{ScoreCalculationMethod::kNone};
-  const SearchResult result = SearchResult::MakeFirstVisit(33, 4, kDepthMaxMateLen, 264);
+  const SearchResult result = SearchResult::MakeFirstVisit(33, 4, MateLen::DepthMax(), 264);
 
   const auto s1 = maker.Make(result, true);
   EXPECT_EQ(s1.ToString(), "cp 0");
@@ -33,7 +32,7 @@ TEST(ScoreTest, MakeUnknown_None) {
 
 TEST(ScoreTest, MakeUnknown_Dn) {
   const ScoreMaker maker{ScoreCalculationMethod::kDn};
-  const SearchResult result = SearchResult::MakeFirstVisit(33, 4, kDepthMaxMateLen, 264);
+  const SearchResult result = SearchResult::MakeFirstVisit(33, 4, MateLen::DepthMax(), 264);
 
   const auto s1 = maker.Make(result, true);
   EXPECT_EQ(s1.ToString(), "cp 4");
@@ -44,7 +43,7 @@ TEST(ScoreTest, MakeUnknown_Dn) {
 
 TEST(ScoreTest, MakeUnknown_MinusPn) {
   const ScoreMaker maker{ScoreCalculationMethod::kMinusPn};
-  const SearchResult result = SearchResult::MakeFirstVisit(33, 4, kDepthMaxMateLen, 264);
+  const SearchResult result = SearchResult::MakeFirstVisit(33, 4, MateLen::DepthMax(), 264);
 
   const auto s1 = maker.Make(result, true);
   EXPECT_EQ(s1.ToString(), "cp -33");
@@ -55,7 +54,7 @@ TEST(ScoreTest, MakeUnknown_MinusPn) {
 
 TEST(ScoreTest, MakeUnknown_Ponanza) {
   const ScoreMaker maker{ScoreCalculationMethod::kPonanza};
-  const SearchResult result = SearchResult::MakeFirstVisit(33, 4, kDepthMaxMateLen, 264);
+  const SearchResult result = SearchResult::MakeFirstVisit(33, 4, MateLen::DepthMax(), 264);
 
   const auto s1 = maker.Make(result, true);
   EXPECT_EQ(s1.ToString(), "cp -1266");
@@ -126,7 +125,7 @@ TEST(ScoreTest, MakeUnknown_Repetition) {
 
 TEST(ScoreTest, IsFinal) {
   const ScoreMaker maker{ScoreCalculationMethod::kNone};
-  const SearchResult r1 = SearchResult::MakeFirstVisit(33, 4, kDepthMaxMateLen, 264);
+  const SearchResult r1 = SearchResult::MakeFirstVisit(33, 4, MateLen::DepthMax(), 264);
   const auto s1 = maker.Make(r1, true);
   EXPECT_FALSE(s1.IsFinal());
 
@@ -141,7 +140,7 @@ TEST(ScoreTest, IsFinal) {
 
 TEST(ScoreTest, AddOneIfFinal) {
   const ScoreMaker maker{ScoreCalculationMethod::kDn};
-  const SearchResult r1 = SearchResult::MakeFirstVisit(33, 4, kDepthMaxMateLen, 264);
+  const SearchResult r1 = SearchResult::MakeFirstVisit(33, 4, MateLen::DepthMax(), 264);
   auto s1 = maker.Make(r1, true);
   s1.AddOneIfFinal();
   EXPECT_EQ(s1.ToString(), "cp 4");

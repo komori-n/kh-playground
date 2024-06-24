@@ -69,7 +69,7 @@ class RepetitionTable {
     next_generation_update_ = entries_per_generation_;
     next_gc_ = kInitialGcDuration;
 
-    const TableEntry initial_entry{kEmptyKey, 0, kMinus1MateLen16, 0};
+    const TableEntry initial_entry{kEmptyKey, 0, MateLen16::Min(), 0};
     std::fill(hash_table_.begin(), hash_table_.end(), initial_entry);
   }
 

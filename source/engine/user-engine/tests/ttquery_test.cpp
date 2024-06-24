@@ -72,7 +72,7 @@ TEST_F(QueryTest, LoopUp_UnknownExact) {
 }
 
 TEST_F(QueryTest, LoopUp_UnknownExactRepetition) {
-  rep_table_.Insert(path_key_, depth_ - 4, komori::kDepthMaxMateLen);
+  rep_table_.Insert(path_key_, depth_ - 4, komori::MateLen::DepthMax());
 
   const PnDn pn{33};
   const PnDn dn{4};
@@ -87,7 +87,7 @@ TEST_F(QueryTest, LoopUp_UnknownExactRepetition) {
   EXPECT_EQ(result.Pn(), kInfinitePnDn);
   EXPECT_EQ(result.Dn(), 0);
   EXPECT_EQ(result.Amount(), entries_[0].Amount());
-  EXPECT_EQ(result.Len(), komori::kDepthMaxMateLen);
+  EXPECT_EQ(result.Len(), komori::MateLen::DepthMax());
   EXPECT_EQ(result.GetFinalData().repetition_start, depth_ - 4);
 }
 

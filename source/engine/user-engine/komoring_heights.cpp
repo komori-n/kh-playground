@@ -32,8 +32,8 @@ std::optional<Move> GetEvasion(tt::TranspositionTable& tt, Node& n) {
   for (const auto move : MovePicker{n}) {
     const auto query = tt.BuildChildQuery(n, move);
     bool does_have_old_child = false;
-    const auto result =
-        query.LookUp(does_have_old_child, kDepthMaxMateLen, [&n, &move = move]() { return InitialPnDn(n, move.move); });
+    const auto result = query.LookUp(does_have_old_child, MateLen::DepthMax(),
+                                     [&n, &move = move]() { return InitialPnDn(n, move.move); });
     if (result.Dn() == 0) {
       return {move};
     }
@@ -87,7 +87,7 @@ void KomoringHeights::NewSearch(const Position& n, bool is_root_or_node) {
   }
 
   moves_from_root_.clear();
-  mate_len_ = kDepthMaxMateLen;
+  mate_len_ = MateLen::DepthMax();
   should_break_main_loop_.store(false, std::memory_order_relaxed);
   multi_pv_ = option_.multi_pv;
   search_results_.resize(option_.threads);
@@ -100,7 +100,7 @@ NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_n
 
   // ひとまず開始局面を探索する
   barrier_.Await();  // await-a
-  SearchResult result = SearchEntry(node, kDepthMaxMateLen, multi_pv_);
+  SearchResult result = SearchEntry(node, MateLen::DepthMax(), multi_pv_);
   monitor_.Stop();
   barrier_.Await();      // await-b
   monitor_.ResetStop();  // stopフラグが立っているのでリセット
@@ -152,14 +152,14 @@ NodeState KomoringHeights::SearchSubThread(const Position& n, bool is_root_or_no
 }
 
 SearchResult KomoringHeights::SearchEntry(Node& n, MateLen len, std::uint32_t multi_pv) {
-  expansion_list_[tl_thread_id].Emplace(tt_, n, len, true, multi_pv, len != kDepthMaxMateLen);
+  expansion_list_[tl_thread_id].Emplace(tt_, n, len, true, multi_pv, len != MateLen::DepthMax());
 
   PnDn thpn = (tl_thread_id + 1) * kPnDnUnit;
   PnDn thdn = (tl_thread_id + 1) * kPnDnUnit;
   SearchResult result;
   do {
     std::uint32_t inc_flag = 0;
-    result = SearchImpl(n, thpn, thdn, kDepthMaxMateLen, inc_flag);
+    result = SearchImpl(n, thpn, thdn, MateLen::DepthMax(), inc_flag);
     if (result.IsFinal()) {
       break;
     }
@@ -211,7 +211,7 @@ SearchResult KomoringHeights::ConstructPv(Node& n, MateLen max_len) {
     std::terminate();
   }
 
-  if (result.Len() <= kZeroMateLen) {
+  if (result.Len() <= MateLen::Zero()) {
     // 現局面で詰みだった
     return result;
   }

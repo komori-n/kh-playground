@@ -3,8 +3,6 @@
 #include "../ttentry.hpp"
 #include "test_lib.hpp"
 
-using komori::kDepthMaxPlus1MateLen;
-using komori::kMinus1MateLen;
 using komori::MateLen;
 using komori::PnDn;
 using komori::SearchAmount;
@@ -257,7 +255,7 @@ TEST(EntryTest, SetPossibleRepetition_PnDn) {
 TEST(EntryTest, Init_ProvenLen) {
   Entry entry;
   entry.Init(0x264, HAND_ZERO);
-  EXPECT_EQ(entry.ProvenLen(), kDepthMaxPlus1MateLen);
+  EXPECT_EQ(entry.ProvenLen(), MateLen::Max());
 }
 
 TEST(EntryTest, UpdateProven_ProvenLen) {
@@ -279,7 +277,7 @@ TEST(EntryTest, UpdateProven_ProvenLen) {
 TEST(EntryTest, Init_DisprovenLen) {
   Entry entry;
   entry.Init(0x264, HAND_ZERO);
-  EXPECT_EQ(entry.DisprovenLen(), kMinus1MateLen);
+  EXPECT_EQ(entry.DisprovenLen(), MateLen::Min());
 }
 
 TEST(EntryTest, UpdateProven_DisprovenLen) {

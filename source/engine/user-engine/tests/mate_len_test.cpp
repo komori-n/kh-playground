@@ -42,13 +42,13 @@ TYPED_TEST(MateLenTest, OperatorMinus) {
   const TypeParam m1{334};
   EXPECT_EQ(m1 - 70, TypeParam{264});
 
-  const TypeParam m2{komori::kDepthMaxMateLen16};
+  const TypeParam m2{TypeParam::DepthMax()};
   EXPECT_EQ(m2 - 30, m2);
 }
 
 TYPED_TEST(MateLenTest, OutputOperator) {
   const TypeParam m1{334};
-  const TypeParam m2{komori::kMinus1MateLen16};
+  const TypeParam m2{TypeParam::Min()};
 
   std::ostringstream oss1;
   oss1 << m1;
@@ -56,7 +56,7 @@ TYPED_TEST(MateLenTest, OutputOperator) {
 
   std::ostringstream oss2;
   oss2 << m2;
-  EXPECT_EQ(oss2.str(), "-1");
+  EXPECT_EQ(oss2.str(), "-10");
 }
 
 TYPED_TEST(MateLenTest, ConvertOtherType) {
@@ -69,13 +69,13 @@ TYPED_TEST(MateLenTest, ConvertOtherType) {
 }
 
 TEST(MateLen, Constants) {
-  EXPECT_EQ(komori::kZeroMateLen.Len(), 0);
-  EXPECT_EQ(komori::kDepthMaxMateLen.Len(), komori::kDepthMax);
-  EXPECT_EQ((komori::kMinus1MateLen + 2).Len(), 1);
-  EXPECT_EQ(komori::kDepthMaxPlus1MateLen.Len(), komori::kDepthMax + 1);
+  EXPECT_EQ(MateLen::Min().Len(), 0);
+  EXPECT_EQ(MateLen::DepthMax().Len(), komori::kDepthMax);
+  EXPECT_EQ((MateLen::Min() + 11).Len(), 1);
+  EXPECT_EQ(MateLen::Max().Len(), komori::kDepthMax + 1);
 
-  EXPECT_EQ(komori::kZeroMateLen16.Len(), 0);
-  EXPECT_EQ(komori::kDepthMaxMateLen16.Len(), komori::kDepthMax);
-  EXPECT_EQ((komori::kMinus1MateLen16 + 2).Len(), 1);
-  EXPECT_EQ(komori::kDepthMaxPlus1MateLen16.Len(), komori::kDepthMax + 1);
+  EXPECT_EQ(MateLen16::Min().Len(), 0);
+  EXPECT_EQ(MateLen16::DepthMax().Len(), komori::kDepthMax);
+  EXPECT_EQ((MateLen16::Min() + 11).Len(), 1);
+  EXPECT_EQ(MateLen16::Max().Len(), komori::kDepthMax + 1);
 }

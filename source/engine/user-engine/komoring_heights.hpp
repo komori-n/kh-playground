@@ -154,7 +154,7 @@ class KomoringHeights {
 
   std::atomic<bool> should_break_main_loop_{false};  ///< メインループを抜けるかどうか
   std::vector<Move> moves_from_root_;                ///< 探索開始局面
-  MateLen mate_len_{kZeroMateLen};                   ///< 探索手数
+  MateLen mate_len_{MateLen::Zero()};                ///< 探索手数
   std::uint32_t multi_pv_{1};                        ///< Multi PV の数
   std::vector<SearchResult> search_results_;         ///< 各スレッドの探索結果
 };

@@ -74,7 +74,7 @@ class PvList {
     idx_.reserve(mp.size());
     for (const auto& [i_raw, move] : WithIndex(mp)) {
       const SearchResult result =
-          SearchResult::MakeFirstVisit(kInfinitePnDn / 2, kInfinitePnDn / 2, kDepthMaxMateLen, 1);
+          SearchResult::MakeFirstVisit(kInfinitePnDn / 2, kInfinitePnDn / 2, MateLen::DepthMax(), 1);
       PvInfo info{move, 1, result, {move}};
       pv_info_.emplace_back(std::move(info));
 
