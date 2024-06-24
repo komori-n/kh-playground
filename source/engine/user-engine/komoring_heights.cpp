@@ -230,14 +230,19 @@ SearchResult KomoringHeights::ConstructPv(Node& n, MateLen max_len) {
     }
   }
 
+  bool force_continue = false;
   SearchResult child_result;
   do {
+    force_continue = false;
     const Move best_move = local_expansion.BestMove();
     pv_moves_.AddMove(best_move, n.GetDepth());
 
     // DoMove() をするとループに遭遇したときに回避できないので、千日手判定なし版を使う
     n.DoMoveNoRepetition(best_move);
     child_result = ConstructPv(n, result.Len() - 1);
+    if (child_result.Len() > result.Len() - 1) {
+      force_continue = true;
+    }
     n.UndoMoveNoRepetition();
 
     local_expansion.UpdateBestChild(child_result);
@@ -245,7 +250,7 @@ SearchResult KomoringHeights::ConstructPv(Node& n, MateLen max_len) {
 
     // 子局面で見つけた手数（mate_path の depth+1 以降に書かれた手数）が現局面の詰み手数と一致しているか確認する
     // もし差異があったら、現局面の詰み手数が間違っていた可能性があるのでもう一度探索する
-  } while (result.Len() != child_result.Len() + 1 && !monitor_.ShouldStop());
+  } while ((force_continue || result.Len() != child_result.Len() + 1) && !monitor_.ShouldStop());
 
   if (n.GetDepth() == 0 && !pv_moves_.Moves().empty()) {
     // local_expansion があるうちに結果を print しておく
