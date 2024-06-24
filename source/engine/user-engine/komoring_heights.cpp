@@ -184,6 +184,7 @@ SearchResult KomoringHeights::ConstructPv(Node& n, MateLen max_len) {
   Defer release_expansion([this]() { expansion_list_[tl_thread_id].Pop(); });
 
   SearchResult result = local_expansion.CurrentResult(n);
+  std::uint32_t loop_count = 0;
   while (!result.IsFinal() && !monitor_.ShouldStop()) {
     // mate_len 以下の詰みがあるはずなので頑張って探す
     // sub thread たちにも `moves_from_root_` 以下 `mate_len_` 手詰めを見つけるのを手伝ってもらう
@@ -201,6 +202,12 @@ SearchResult KomoringHeights::ConstructPv(Node& n, MateLen max_len) {
 
     // sub thread の結果を result にコピーすることもできるが、メインスレッドの local expansion の状態が
     // 狂ってしまうので、あえて何もしない
+
+    if (++loop_count > 100) {
+      // 無駄合は確率で消える可能性があるので、max_len で詰むはずでも詰みを見つけれられないことがある。
+      // そんなときは、詰み手数を伸ばして親局面から探索をやり直す
+      return SearchResult::MakeFinal<true>(n.OrHand(), MateLen{max_len + 2}, 1);
+    }
   }
 
   if (result.Dn() == 0) {
