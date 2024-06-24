@@ -292,7 +292,7 @@ SearchResult KomoringHeights::SearchImpl(Node& n, PnDn thpn, PnDn thdn, MateLen 
     n.DoMove(best_move);
 
     // 子局面を展開する。展開した expansion は UndoMove() の直前に忘れずに開放しなければならない。
-    expansion_list_[tl_thread_id].Emplace(tt_, n, len - 1, is_first_search);
+    expansion_list_[tl_thread_id].Emplace(tt_, n, len - 1, is_first_search, 1, in_pv_search_);
     auto& child_expansion = expansion_list_[tl_thread_id].back();
 
     SearchResult child_result;

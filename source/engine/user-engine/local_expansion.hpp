@@ -17,6 +17,7 @@
 #include "ranges.hpp"
 #include "splitted_hand.hpp"
 #include "transposition_table.hpp"
+#include "ttquery.hpp"
 #include "typedefs.hpp"
 
 namespace komori {
@@ -123,7 +124,6 @@ class LocalExpansion {
                  std::uint32_t multi_pv = 1,
                  bool strict_lookup = false)
       : or_node_{n.IsOrNode()}, mp_{n, true}, len_{len}, multi_pv_{multi_pv}, lazy_expansion_{n, mp_} {
-    const MateLen min_len = or_node_ ? MateLen{0} : MateLen{1};
     for (const auto& [i_raw, move] : WithIndex<std::uint32_t>(mp_)) {
       // 理由はよくわからないが、result の直前に query を作るより、ここで query を作るほうが少しだけ速い
       const auto& query = queries_[i_raw] = tt.BuildChildQuery(n, move.move);
@@ -131,8 +131,6 @@ class LocalExpansion {
 
       if (const auto maybe_depth = n.IsRepetitionOrInferiorAfter(move.move)) {
         result = SearchResult::MakeRepetition(n.OrHandAfter(move.move), len, 1, *maybe_depth);
-      } else if (len_ < min_len + 1) {
-        result = SearchResult::MakeFinal<false>(n.OrHandAfter(move.move), min_len - 1, 1);
       } else {
         result = query.LookUp(does_have_old_child_, len - 1, MakeInitialEvaluationFunc(n, move), strict_lookup);
 
@@ -154,6 +152,45 @@ class LocalExpansion {
       } else {
       FOUND_FINAL:
         lazy_expansion_.Remove(i_raw);
+
+        if (!or_node_ && is_drop(move.move) && strict_lookup && result.Pn() == 0 &&
+            !result.GetFinalData().IsRepetition()) {
+          // `pr` は無駄合かもしれない
+          const Square to = to_sq(move.move);
+          const PieceType pr = move_dropped_piece(move.move);
+
+          Node& nn = const_cast<Node&>(n);
+          nn.DoMoveNoRepetition(move.move);
+          Defer undo{[&nn] { nn.UndoMoveNoRepetition(); }};
+
+          for (const ExtMove m2 : MovePicker{nn}) {
+            if (to_sq(m2) != to) {
+              continue;
+            }
+
+            // to に動く指し手で、`pr` がなくても詰む手であれば、`pr` は無駄合である
+            const tt::Query& query2 = tt.BuildChildQuery(nn, m2.move);
+            if (query2.IsRedundantProven(pr)) {
+              redundant_drop_idx_.Push(i_raw);
+              idx_.Pop();
+              break;
+            }
+
+            // 1手詰のとき、置換表には0手詰として書かれていない場合がある
+            // そのため、`m2` を指したときに詰むかどうかを確認する
+            if (result.Len() == MateLen{1}) {
+              nn.DoMoveNoRepetition(m2);
+              Defer undo2{[&nn] { nn.UndoMoveNoRepetition(); }};
+
+              if (MovePicker{nn}.empty()) {
+                redundant_drop_idx_.Push(i_raw);
+                idx_.Pop();
+                break;
+              }
+            }
+          }
+        }
+
         if (result.Phi(or_node_) == 0) {
           if (excluded_moves_ >= multi_pv_ - 1) {
             if (strict_lookup) {
@@ -496,12 +533,17 @@ class LocalExpansion {
       SearchAmount amount = 1;
       for (const auto i_raw : idx_) {
         const auto& result = results_[i_raw];
-
         splitted_hand.MergeByMax(result.GetFinalData().hand);
         amount = std::max(amount, result.Amount());
         if (result.Len() > mate_len) {
           mate_len = result.Len();
         }
+      }
+
+      // 無駄合で除外した指し手は、証明駒の計算には考慮にいれる必要がある
+      for (const auto i_raw : redundant_drop_idx_) {
+        const auto& result = results_[i_raw];
+        splitted_hand.MergeByMax(result.GetFinalData().hand);
       }
       amount += std::max<SearchAmount>(mp_.size(), 1) - 1;
 
@@ -572,11 +614,12 @@ class LocalExpansion {
 
   /// 現在有効な生添字の一覧。「良さ順」で並んでいる。
   InlineStack<std::uint32_t, kMaxCheckMovesPerNode> idx_;
+  /// 無駄合で除外された指し手の生添字の一覧
+  InlineStack<std::uint32_t, kMaxCheckMovesPerNode> redundant_drop_idx_;
 
   /// 勝ちになる手を見つけた個数
   /// multi_pv_ == 1 のときは、この値は常に 0 である。multi_pv_ > 1 のとき、勝ち（phi==0）を見つけた後に探索を続ける
   /// 際に用いる。常に excluded_moves_ <= multi_pv_ - 1 かつ excluded_moves_ <= mp_.size() である。
- public:
   std::uint32_t excluded_moves_{0};
 };
 }  // namespace komori

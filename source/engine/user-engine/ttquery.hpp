@@ -178,6 +178,26 @@ class Query {
     }
   }
 
+  /**
+   * @brief 現局面が `pr` の余る詰みかどうか
+   * @param pr 駒
+   * @return true `pr` が余る詰みである / false `pr` が余る詰みでない
+   */
+  bool IsRedundantProven(PieceType pr) const {
+    Hand hand = hand_;
+    sub_hand(hand, pr);
+    for (auto itr = initial_entry_pointer_; !itr->IsNull(); ++itr) {
+      std::shared_lock lock(*itr);
+      if (itr->IsFor(board_key_)) {
+        if (hand_is_equal_or_superior(hand, itr->GetHand()) && itr->ProvenLen() < MateLen::DepthMax()) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
  private:
   /**
    * @brief 置換表に `hand` に一致するエントリがあればそれを返し、なければ作って返す
