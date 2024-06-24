@@ -31,23 +31,21 @@ namespace detail {
  *
  * 高速 1 手詰めルーチンおよび高速 0 手不詰ルーチンにより自明な詰み／不詰を展開することなく検知することができる。
  */
-inline std::optional<SearchResult> CheckObviousFinalAfter(const Position& n, Move move) {
+inline std::optional<SearchResult> CheckObviousFinalAfter(const Node& n, Move move) {
+  Node& nn = const_cast<Node&>(n);
   // ここの1手詰判定が意外と重たいので、少し泥臭く高速化する
-  auto& pos = const_cast<Position&>(n);
-  StateInfo si;
-  pos.do_move(move, si);
-  if (!DoesHaveMatePossibility(pos)) {
-    const Hand curr_hand = static_cast<Hand>(HAND_BIT_MASK);
-    const Hand hand = RemoveIfHandGivesOtherChecks(pos, curr_hand);
+  nn.DoMoveNoRepetition(move);
+  Defer undo_defer{[&nn] { nn.UndoMoveNoRepetition(); }};
 
-    pos.undo_move(move);
+  if (!DoesHaveMatePossibility(nn.Pos())) {
+    const Hand curr_hand = static_cast<Hand>(HAND_BIT_MASK);
+    const Hand hand = RemoveIfHandGivesOtherChecks(nn.Pos(), curr_hand);
+
     return SearchResult::MakeFinal<false>(hand, MateLen::DepthMax(), 1);
-  } else if (auto [best_move, proof_hand] = CheckMate1Ply(pos); proof_hand != kNullHand) {
-    pos.undo_move(move);
+  } else if (auto [best_move, proof_hand] = CheckMate1Ply(nn.Pos()); proof_hand != kNullHand) {
     return SearchResult::MakeFinal<true>(proof_hand, MateLen{1}, 1);
   }
 
-  pos.undo_move(move);
   return std::nullopt;
 }
 }  // namespace detail
@@ -147,7 +145,7 @@ class LocalExpansion {
       idx_.Push(i_raw);
       if (!result.IsFinal()) {
         if (!or_node_ && first_search && result.GetUnknownData().is_first_visit) {
-          if (const auto maybe_res = detail::CheckObviousFinalAfter(n.Pos(), move.move)) {
+          if (const auto maybe_res = detail::CheckObviousFinalAfter(n, move.move)) {
             query.SetResult(*maybe_res);
             result = *maybe_res;
             goto FOUND_FINAL;
