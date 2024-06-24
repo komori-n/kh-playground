@@ -153,42 +153,9 @@ class LocalExpansion {
       FOUND_FINAL:
         lazy_expansion_.Remove(i_raw);
 
-        if (!or_node_ && is_drop(move.move) && strict_lookup && result.Pn() == 0 &&
-            !result.GetFinalData().IsRepetition()) {
-          // `pr` は無駄合かもしれない
-          const Square to = to_sq(move.move);
-          const PieceType pr = move_dropped_piece(move.move);
-
-          Node& nn = const_cast<Node&>(n);
-          nn.DoMoveNoRepetition(move.move);
-          Defer undo{[&nn] { nn.UndoMoveNoRepetition(); }};
-
-          for (const ExtMove m2 : MovePicker{nn}) {
-            if (to_sq(m2) != to) {
-              continue;
-            }
-
-            // to に動く指し手で、`pr` がなくても詰む手であれば、`pr` は無駄合である
-            const tt::Query& query2 = tt.BuildChildQuery(nn, m2.move);
-            if (query2.IsRedundantProven(pr)) {
-              redundant_drop_idx_.Push(i_raw);
-              idx_.Pop();
-              break;
-            }
-
-            // 1手詰のとき、置換表には0手詰として書かれていない場合がある
-            // そのため、`m2` を指したときに詰むかどうかを確認する
-            if (result.Len() == MateLen{1}) {
-              nn.DoMoveNoRepetition(m2);
-              Defer undo2{[&nn] { nn.UndoMoveNoRepetition(); }};
-
-              if (MovePicker{nn}.empty()) {
-                redundant_drop_idx_.Push(i_raw);
-                idx_.Pop();
-                break;
-              }
-            }
-          }
+        if (!or_node_ && is_drop(move.move) && strict_lookup && result.Pn() == 0 && IsRedundantDrop(tt, n, i_raw)) {
+          idx_.Pop();
+          redundant_drop_idx_.Push(i_raw);
         }
 
         if (result.Phi(or_node_) == 0) {
@@ -371,6 +338,49 @@ class LocalExpansion {
   }
 
  private:
+  /**
+   * @brief Andnode `n` において、mp_[i_raw] が無駄合かどうか判定する
+   * @param tt 置換表
+   * @param n  現局面
+   * @param i_raw 生添字
+   * @return 無駄合なら `true`、そうでなければ `false`
+   */
+  bool IsRedundantDrop(tt::TranspositionTable& tt, const Node& n, std::uint32_t i_raw) {
+    const SearchResult& result = results_[i_raw];
+    const Move move = mp_[i_raw];
+    const Square to = to_sq(move);
+    const PieceType pr = move_dropped_piece(move);
+
+    Node& nn = const_cast<Node&>(n);
+    nn.DoMoveNoRepetition(move);
+    Defer undo{[&nn] { nn.UndoMoveNoRepetition(); }};
+
+    for (const ExtMove m2 : MovePicker{nn}) {
+      if (to_sq(m2) != to) {
+        continue;
+      }
+
+      // to に動く指し手で、`pr` がなくても詰む手であれば、`pr` は無駄合である
+      const tt::Query& query2 = tt.BuildChildQuery(nn, m2.move);
+      if (query2.IsRedundantProven(pr)) {
+        return true;
+      }
+
+      // 1手詰のとき、置換表には0手詰として書かれていない場合がある
+      // そのため、`m2` を指したときに詰むかどうかを確認する
+      if (result.Len() == MateLen{1}) {
+        nn.DoMoveNoRepetition(m2);
+        Defer undo2{[&nn] { nn.UndoMoveNoRepetition(); }};
+
+        if (MovePicker{nn}.empty()) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   // <PnDn>
   /// Pn を計算する
   PnDn GetPn() const {
