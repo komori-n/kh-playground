@@ -372,7 +372,7 @@ class LocalExpansion {
         nn.DoMoveNoRepetition(m2);
         Defer undo2{[&nn] { nn.UndoMoveNoRepetition(); }};
 
-        if (MovePicker{nn}.empty()) {
+        if (nn.Pos().is_mated()) {
           return true;
         }
       }
