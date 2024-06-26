@@ -100,16 +100,20 @@ NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_n
 
   // ひとまず開始局面を探索する
   barrier_.Await();  // await-a
-  SearchResult result = SearchEntry(node, MateLen::DepthMax(), multi_pv_);
+  search_results_[0] = SearchEntry(node, MateLen::DepthMax(), multi_pv_);
   monitor_.Stop();
   barrier_.Await();      // await-b
   monitor_.ResetStop();  // stopフラグが立っているのでリセット
 
-  // 全スレッドの探索結果をマージする
+  // 全スレッドの探索結果をマージする。final な結果（=Stopの要因となった結果）の中で最もLessなものを選ぶ
   const SearchResultComparer comparer{node.IsOrNode()};
-  for (int i = 1; i < option_.threads; ++i) {
-    if (search_results_[i].IsFinal() && comparer(search_results_[i], result) == SearchResultComparer::Ordering::kLess) {
+  bool is_first = true;
+  SearchResult result;
+  for (int i = 0; i < option_.threads; ++i) {
+    if (search_results_[i].IsFinal() &&
+        (is_first || comparer(search_results_[i], result) == SearchResultComparer::Ordering::kLess)) {
       result = search_results_[i];
+      is_first = false;
     }
   }
 
@@ -179,11 +183,11 @@ SearchResult KomoringHeights::ConstructPv(Node& n, MateLen max_len) {
   // 証明駒を使わずにできるだけ短い詰みを LookUp してほしいので、strict_lookup=true にしている
   const std::uint32_t multi_pv = 1;
   expansion_list_[tl_thread_id].Emplace(tt_, n, max_len, false, multi_pv, true);
-  LocalExpansion& local_expansion = expansion_list_[tl_thread_id].back();
+  LocalExpansion* local_expansion = &expansion_list_[tl_thread_id].back();
   // early exit するときに忘れずに local_expansion を開放するための RAII
   Defer release_expansion([this]() { expansion_list_[tl_thread_id].Pop(); });
 
-  SearchResult result = local_expansion.CurrentResult(n);
+  SearchResult result = local_expansion->CurrentResult(n);
   std::uint32_t loop_count = 0;
   while (!result.IsFinal() && !monitor_.ShouldStop()) {
     // mate_len 以下の詰みがあるはずなので頑張って探す
@@ -193,22 +197,43 @@ SearchResult KomoringHeights::ConstructPv(Node& n, MateLen max_len) {
     multi_pv_ = multi_pv;
     barrier_.Await();  // await-a
 
+    // 前の週で別スレッドが詰みを見つけているかもしれないので、改めて展開しなおす
+    expansion_list_[tl_thread_id].Pop();
+    expansion_list_[tl_thread_id].Emplace(tt_, n, max_len, false, multi_pv, true);
+
     // expansion 済なので、SearchEntryではなく SearchImpl を呼ぶ
     std::uint32_t inc_flag = 0;
-    result = SearchImpl(n, kInfinitePnDn, kInfinitePnDn, max_len, inc_flag);
+    search_results_[tl_thread_id] = SearchImpl(n, kInfinitePnDn, kInfinitePnDn, max_len, inc_flag);
     monitor_.Stop();
     barrier_.Await();  // await-b
     monitor_.ResetStop();
 
     // sub thread の結果を result にコピーすることもできるが、メインスレッドの local expansion の状態が
     // 狂ってしまうので、あえて何もしない
+    result = local_expansion->CurrentResult(n);
 
-    if (++loop_count > 100) {
+    if (++loop_count % 30 == 0) {
       // 無駄合は確率で消える可能性があるので、max_len で詰むはずでも詰みを見つけれられないことがある。
       // そんなときは、詰み手数を伸ばして親局面から探索をやり直す
-      max_len = max_len + 2;
-      loop_count = 0;
+
+      if (option_.threads > 1) {
+        MateLen new_max_len = MateLen::DepthMax();
+        for (int i = 0; i < option_.threads; ++i) {
+          if (search_results_[i].Pn() == 0) {
+            new_max_len = std::min(new_max_len, search_results_[i].Len());
+          }
+        }
+        max_len = new_max_len;
+      } else {
+        max_len = max_len + 2;
+      }
     }
+  }
+
+  if (n.GetDepth() != n.Pos().state()->pliesFromNull) {
+    sync_cout << n.Pos() << sync_endl;
+    sync_cout << "info string depth mismatch: " << n.GetDepth() << " " << n.Pos().state()->pliesFromNull << sync_endl;
+    std::terminate();
   }
 
   if (result.Dn() == 0) {
@@ -233,7 +258,7 @@ SearchResult KomoringHeights::ConstructPv(Node& n, MateLen max_len) {
 
   SearchResult child_result;
   do {
-    const Move best_move = local_expansion.BestMove();
+    const Move best_move = local_expansion->BestMove();
     pv_moves_.AddMove(best_move, n.GetDepth());
 
     // DoMove() をするとループに遭遇したときに回避できないので、千日手判定なし版を使う
@@ -241,8 +266,8 @@ SearchResult KomoringHeights::ConstructPv(Node& n, MateLen max_len) {
     child_result = ConstructPv(n, result.Len() - 1);
     n.UndoMoveNoRepetition();
 
-    local_expansion.UpdateBestChild(child_result);
-    result = local_expansion.CurrentResult(n);
+    local_expansion->UpdateBestChild(child_result);
+    result = local_expansion->CurrentResult(n);
 
     // 子局面で見つけた手数（mate_path の depth+1 以降に書かれた手数）が現局面の詰み手数と一致しているか確認する
     // もし差異があったら、現局面の詰み手数が間違っていた可能性があるのでもう一度探索する

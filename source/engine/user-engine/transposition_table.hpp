@@ -5,6 +5,7 @@
 #define KOMORI_TRANSPOSITION_TABLE_HPP_
 
 #include "node.hpp"
+#include "redundant_move_table.hpp"
 #include "regular_table.hpp"
 #include "repetition_table.hpp"
 #include "ttquery.hpp"
@@ -21,6 +22,7 @@ constexpr inline double kRegularRepetitionRatio = 0.75;
  * @tparam RegularTable 通常テーブル。単体テストしやすいように、外部から注入できるようにテンプレートパラメータにする。
  * @tparam RepetitionTable 千日手テーブル。
  *                         単体テストしやすいように、外部から注入できるようにテンプレートパラメータにする。
+ * @tparam RedundantMoveTable 無駄合テーブル。
  *
  * 置換表は、大きく分けて通常テーブル（RegularTable）と千日手テーブル（RepetitionTable）に分けられる。
  * 通常テーブルは大部分の探索結果を保存する領域で、探索中局面の pn/dn 値および証明済／反証済局面の
@@ -40,7 +42,7 @@ constexpr inline double kRegularRepetitionRatio = 0.75;
  * 内部変数がどうなっているかが把握できない。単体テストで知りたいのは参照クラスのメンバ関数が正しく呼ばれているかどうか
  * なので、別物に差し替えて中身をチェックできるようにしている。
  */
-template <typename Query, typename RegularTable, typename RepetitionTable>
+template <typename Query, typename RegularTable, typename RepetitionTable, typename RedundantMoveTable>
 class TranspositionTableImpl {
  public:
   /// Default constructor(default)
@@ -95,6 +97,7 @@ class TranspositionTableImpl {
   void Clear() {
     regular_table_.Clear();
     repetition_table_.Clear();
+    redundant_move_table_.Clear();
   }
 
   /**
@@ -129,6 +132,24 @@ class TranspositionTableImpl {
     auto cluster = regular_table_.PointerOf(board_key);
     return {repetition_table_, cluster, path_key, board_key, hand, depth};
   }
+
+  /**
+   * @brief 局面 (`board_key`, `hand`) で駒打ち `move` は無駄合か？
+   * @param board_key 盤面ハッシュ
+   * @param hand 持ち駒
+   * @param move 駒打ち
+   * @return true 無駄合, false 無駄合でない
+   */
+  bool IsRedundant(Key board_key, Hand hand, Move move) const {
+    return redundant_move_table_.Contains(board_key, hand, move);
+  }
+  /**
+   * @brief 局面 (`board_key`, `hand`) で駒打ち `move` が無駄合であることを登録する
+   * @param board_key 盤面ハッシュ
+   * @param hand 持ち駒
+   * @param move 駒打ち
+   */
+  void InsertRedundant(Key board_key, Hand hand, Move move) { redundant_move_table_.Insert(board_key, hand, move); }
 
   /**
    * @brief 置換表使用率（千分率）を計算する
@@ -187,6 +208,8 @@ class TranspositionTableImpl {
   auto& GetRegularTable() { return regular_table_; }
   /// 千日手テーブルを直接取得する
   auto& GetRepetitionTable() { return repetition_table_; }
+  /// 無駄合テーブルを直接取得する
+  auto& GetRedundantMoveTable() { return redundant_move_table_; }
   // </テスト用>
 
  private:
@@ -194,13 +217,15 @@ class TranspositionTableImpl {
   RegularTable regular_table_{};
   /// 千日手テーブル
   RepetitionTable repetition_table_{};
+  /// 無駄合テーブル
+  RedundantMoveTable redundant_move_table_{};
 };
 }  // namespace detail
 
 /**
  * @brief 置換表の本体。詳しい実装は `detail::TranspositionTableImpl` を参照。
  */
-using TranspositionTable = detail::TranspositionTableImpl<Query, RegularTable, RepetitionTable>;
+using TranspositionTable = detail::TranspositionTableImpl<Query, RegularTable, RepetitionTable, RedundantMoveTable>;
 }  // namespace komori::tt
 
 #endif  // KOMORI_TRANSPOSITION_TABLE_HPP_

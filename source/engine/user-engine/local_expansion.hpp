@@ -130,9 +130,10 @@ class LocalExpansion {
       auto& result = results_[i_raw];
 
       if (const auto maybe_depth = n.IsRepetitionOrInferiorAfter(move.move)) {
-        result = SearchResult::MakeRepetition(n.OrHandAfter(move.move), len, 1, *maybe_depth);
+        result = SearchResult::MakeRepetition(n.OrHandAfter(move.move), len - 1, 1, *maybe_depth);
       } else {
-        result = query.LookUp(does_have_old_child_, len - 1, MakeInitialEvaluationFunc(n, move), strict_lookup);
+        const MateLen lookup_len = len < MateLen{1} ? MateLen::DepthMax() : len - 1;
+        result = query.LookUp(does_have_old_child_, lookup_len, MakeInitialEvaluationFunc(n, move), strict_lookup);
 
         if (!result.IsFinal() && lazy_expansion_.HasPrev(i_raw)) {
           // prev がいる non-final な手は、prev が final になるまで探索を後回しにする
@@ -141,6 +142,13 @@ class LocalExpansion {
       }
 
       idx_.Push(i_raw);
+      if (!or_node_ && is_drop(move.move) && strict_lookup && IsRedundantDrop(tt, n, i_raw)) {
+        result = SearchResult::MakeFinal<true>(n.OrHand(), len - 1, result.Amount());
+        idx_.Pop();
+        redundant_drop_idx_.Push(i_raw);
+        goto FOUND_FINAL;
+      }
+
       if (!result.IsFinal()) {
         if (!or_node_ && first_search && result.GetUnknownData().is_first_visit) {
           if (const auto maybe_res = detail::CheckObviousFinalAfter(n, move.move)) {
@@ -152,12 +160,6 @@ class LocalExpansion {
       } else {
       FOUND_FINAL:
         lazy_expansion_.Remove(i_raw);
-
-        if (!or_node_ && is_drop(move.move) && strict_lookup && result.Pn() == 0 && IsRedundantDrop(tt, n, i_raw)) {
-          idx_.Pop();
-          redundant_drop_idx_.Push(i_raw);
-        }
-
         if (result.Phi(or_node_) == 0) {
           if (excluded_moves_ >= multi_pv_ - 1) {
             if (strict_lookup) {
@@ -258,12 +260,15 @@ class LocalExpansion {
     if (!orig_was_final && search_result.Phi(or_node_) == 0) {
       // 後から見つかった手のほうがいい手かもしれないので、前半部分をソートし直しておく
       ResortExcludedBack();
+      if (search_result.Pn() == 0 && search_result.Len() > len_) {
+        multi_pv_++;
+      }
       if (excluded_moves_ >= multi_pv_ - 1) {
         // multi_pv_ 個の勝ちになる手を見つけたので、これ以上探索を続ける必要はない
         return;
       }
       excluded_moves_++;
-      if (excluded_moves_ >= mp_.size()) {
+      if (excluded_moves_ >= idx_.size()) {
         // 全合法手が勝ちだとわかったので、これ以上探索を続ける必要はない
         return;
       }
@@ -350,6 +355,13 @@ class LocalExpansion {
     const Move move = mp_[i_raw];
     const Square to = to_sq(move);
     const PieceType pr = move_dropped_piece(move);
+    const Key board_key = n.BoardKey();
+    const Hand hand = n.OrHand();
+    const std::string sfen = n.Pos().sfen();
+
+    if (tt.IsRedundant(board_key, hand, move)) {
+      return true;
+    }
 
     Node& nn = const_cast<Node&>(n);
     nn.DoMoveNoRepetition(move);
@@ -363,6 +375,7 @@ class LocalExpansion {
       // to に動く指し手で、`pr` がなくても詰む手であれば、`pr` は無駄合である
       const tt::Query& query2 = tt.BuildChildQuery(nn, m2.move);
       if (query2.IsRedundantProven(pr)) {
+        tt.InsertRedundant(board_key, hand, move);
         return true;
       }
 
@@ -373,6 +386,7 @@ class LocalExpansion {
         Defer undo2{[&nn] { nn.UndoMoveNoRepetition(); }};
 
         if (nn.Pos().is_mated()) {
+          tt.InsertRedundant(board_key, hand, move);
           return true;
         }
       }
@@ -608,7 +622,7 @@ class LocalExpansion {
   const bool or_node_;                 ///< 現局面が OR node かどうか
   const MovePicker mp_;                ///< 現局面の合法手
   const MateLen len_;                  ///< 現局面における残り探索手数
-  const std::uint32_t multi_pv_;       ///< MultiPv の値。1以上でなければならない
+  std::uint32_t multi_pv_;             ///< MultiPv の値。1以上でなければならない
   LazyExpansionTable lazy_expansion_;  ///< 後回しにしている手のグラフ構造
 
   /// 子の現在の評価値結果一覧

@@ -6,6 +6,7 @@
 
 #include "../transposition_table.hpp"
 #include "test_lib.hpp"
+#include "types.h"
 
 using komori::kDepthMax;
 using komori::tt::CircularEntryPointer;
@@ -48,6 +49,12 @@ struct QueryMock {
   Depth depth;
 };
 
+struct RedundantMoveTableMock {
+  MOCK_METHOD(bool, Contains, (Key, Hand, Move), (const));
+  MOCK_METHOD(void, Insert, (Key, Hand, Move));
+  MOCK_METHOD(void, Clear, ());
+};
+
 class TranspositionTableTest : public ::testing::Test {
  protected:
   void SetUp() override {
@@ -56,7 +63,7 @@ class TranspositionTableTest : public ::testing::Test {
     tt_.Resize(1);
   }
 
-  TranspositionTableImpl<QueryMock, RegularTableMock, RepetitionTableMock> tt_;
+  TranspositionTableImpl<QueryMock, RegularTableMock, RepetitionTableMock, RedundantMoveTableMock> tt_;
 };
 }  // namespace
 
@@ -129,4 +136,24 @@ TEST_F(TranspositionTableTest, CollectGarbage) {
 TEST_F(TranspositionTableTest, Capacity) {
   EXPECT_CALL(tt_.GetRegularTable(), Capacity()).WillOnce(Return(334));
   EXPECT_EQ(tt_.Capacity(), 334);
+}
+
+TEST_F(TranspositionTableTest, IsRedundant) {
+  const Key board_key = 0x334334334334334ULL;
+  const Hand hand = MakeHand<PAWN, LANCE, LANCE>();
+  const Move move = make_move(SQ_11, SQ_12, B_PAWN);
+
+  EXPECT_CALL(tt_.GetRedundantMoveTable(), Contains(board_key, hand, move)).WillOnce(Return(true));
+  EXPECT_CALL(tt_.GetRedundantMoveTable(), Contains(board_key + 1, hand, move)).WillOnce(Return(false));
+  EXPECT_TRUE(tt_.IsRedundant(board_key, hand, move));
+  EXPECT_FALSE(tt_.IsRedundant(board_key + 1, hand, move));
+}
+
+TEST_F(TranspositionTableTest, InsertRedundant) {
+  const Key board_key = 0x334334;
+  const Hand hand = MakeHand<PAWN, LANCE, LANCE>();
+  const Move move = make_move(SQ_11, SQ_12, B_PAWN);
+
+  EXPECT_CALL(tt_.GetRedundantMoveTable(), Insert(board_key, hand, move)).Times(1);
+  tt_.InsertRedundant(board_key, hand, move);
 }
