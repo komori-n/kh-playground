@@ -199,11 +199,17 @@ class LocalExpansion {
    * @pre !Current().IsFinal()
    */
   Move BestMove() const { return mp_[idx_[excluded_moves_]].move; }
+  /// 現局面の合法手の数（無駄合除く）
+  std::size_t Size() const { return idx_.size(); }
   /**
    * @brief 最善の子の探索結果を取得する
    * @pre !Current().IsFinal()
    */
   const SearchResult& FrontResult() const { return results_[idx_[excluded_moves_]]; }
+  /// `move` に対応する探索結果を取得する
+  const SearchResult& ResultFor(Move move) const {
+    return results_[std::find(mp_.begin(), mp_.end(), move) - mp_.begin()];
+  }
   /**
    * @brief unproven old child がいるかどうか
    */
@@ -303,6 +309,16 @@ class LocalExpansion {
     if (needs_recalc_delta) {
       RecalcDelta();
     }
+  }
+
+  /// Final だとわかっている `move` に対する探索結果を更新する
+  void UpdateFinal(const SearchResult& search_result, Move move) {
+    const auto old_i_raw = std::find(mp_.begin(), mp_.end(), move) - mp_.begin();
+    const auto& query = queries_[old_i_raw];
+    auto& result = results_[old_i_raw];
+    result = search_result;
+    query.SetResult(search_result);
+    std::sort(idx_.begin(), idx_.end(), MakeComparer());
   }
 
   /**

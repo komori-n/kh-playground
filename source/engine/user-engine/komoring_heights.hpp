@@ -92,6 +92,14 @@ class KomoringHeights {
   SearchResult SearchEntry(Node& n, MateLen len, std::uint32_t multi_pv);
 
   /**
+   * @brief 局面 `n` を探索する。LocalExpansion をすでに持っている場合に使用する
+   * @pre `n` に対して LocalExpansion がすでに展開されていること
+   * @param n 現局面
+   * @return 探索結果
+   */
+  SearchResult SearchEntryNoEmplace(Node& n);
+
+  /**
    * @brief `n` に対し `mate_len` 手以下の詰み手順を `pv_moves_` に格納する
    * @param n 現局面
    * @param max_len 現局面の最大詰み手数
@@ -101,11 +109,12 @@ class KomoringHeights {
   SearchResult ConstructProvenPv(Node& n, MateLen max_len);
 
   /**
-   * @brief `n` に対し、不詰手順を `best_moves_` に格納する
+   * @brief `n` に対し詰みを逃れる指し手を1つ返す
+   * @pre `n` が AND node かつ不詰
    * @param n 現局面
-   * @pre 現局面が不詰であること
+   * @return 詰みを逃れる指し手
    */
-  void ConstructDisprovenPv(Node& n);
+  Move GetEvasion(Node& n);
 
   /**
    * @brief 詰め探索の本体。（再帰関数）

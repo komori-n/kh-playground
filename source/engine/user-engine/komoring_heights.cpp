@@ -22,24 +22,14 @@ std::pair<PnDn, PnDn> NextPnDnThresholds(PnDn pn, PnDn dn, PnDn curr_thpn, PnDn 
   return std::make_pair(ClampPnDn(curr_thpn, thpn, kInfinitePnDn), ClampPnDn(curr_thdn, thdn, kInfinitePnDn));
 }
 
-/**
- * @brief AND node `n` において、詰みを逃れる手を1つ任意に選んで返す
- * @param tt  置換表
- * @param n   現局面（AND node）
- * @return `n` において詰みを逃れる手（あれば）
- */
-std::optional<Move> GetEvasion(tt::TranspositionTable& tt, Node& n) {
-  for (const auto move : MovePicker{n}) {
-    const auto query = tt.BuildChildQuery(n, move);
-    bool does_have_old_child = false;
-    const auto result = query.LookUp(does_have_old_child, MateLen::DepthMax(),
-                                     [&n, &move = move]() { return InitialPnDn(n, move.move); });
-    if (result.Dn() == 0) {
-      return {move};
+Move SelectNextBestmove(const LocalExpansion& local_expansion, const std::vector<Move>& searched_moves) {
+  for (const auto& [move, result] : local_expansion.GetAllResults()) {
+    if (std::find(searched_moves.begin(), searched_moves.end(), move) == searched_moves.end()) {
+      return move;
     }
   }
 
-  return std::nullopt;
+  return MOVE_NONE;
 }
 }  // namespace
 
@@ -100,37 +90,71 @@ NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_n
   auto& nn = const_cast<Position&>(n);
   Node node{nn, is_root_or_node};
 
-  // ひとまず開始局面を探索する
-  search_promises_[tl_thread_id].set_value(SearchEntry(node, MateLen::DepthMax(), multi_pv_));
-  monitor_.Stop();
+  expansion_list_[tl_thread_id].Emplace(tt_, node, MateLen::DepthMax(), true, multi_pv_);
+  LocalExpansion* local_expansion = &expansion_list_[tl_thread_id].back();
 
-  // 全スレッドの探索結果をマージする。final な結果（=Stopの要因となった結果）の中で最もLessなものを選ぶ
-  const SearchResultComparer comparer{node.IsOrNode()};
-  bool is_first = true;
   SearchResult result;
-  for (int i = 0; i < option_.threads; ++i) {
-    const SearchResult thread_result = search_futures_[i].get();
-    if (thread_result.IsFinal() &&
-        (is_first || comparer(thread_result, result) == SearchResultComparer::Ordering::kLess)) {
-      result = thread_result;
-      is_first = false;
+  while (!monitor_.ShouldStop()) {
+    result = SearchEntryNoEmplace(node);
+    monitor_.Stop();
+    for (int i = 1; i < option_.threads; ++i) {
+      search_futures_[i].wait();
     }
+    monitor_.ResetStop();
+
+    if (result.IsFinal()) {
+      break;
+    }
+    expansion_list_[tl_thread_id].Pop();
+    expansion_list_[tl_thread_id].Emplace(tt_, node, MateLen::DepthMax(), false, multi_pv_, true);
+    local_expansion = &expansion_list_[tl_thread_id].back();
+
+    ResetFutures();
+    barrier_.Await();
   }
-  monitor_.ResetStop();
 
   score_ = score_maker_.Make(result, node.IsRootOrNode());
   sync_cout << CurrentInfo() << result << sync_endl;
 
   in_pv_search_ = true;
-  if (result.Pn() == 0) {
-    // pv作成
-    result = ConstructProvenPv(node, result.Len());
-    score_ = score_maker_.Make(result, node.IsRootOrNode());
 
-    best_moves_ = pv_moves_.Moves();
-  } else if (result.Dn() == 0) {
-    ConstructDisprovenPv(node);
+  std::vector<Move> searched_moves{};
+  SearchResult best_child_result;
+  const std::size_t loop_num = std::min<std::size_t>(local_expansion->Size(), option_.multi_pv);
+  for (std::size_t i = 0; i < loop_num && !monitor_.ShouldStop(); ++i) {
+    const Move move = SelectNextBestmove(*local_expansion, searched_moves);
+    searched_moves.push_back(move);
+
+    node.DoMoveNoRepetition(move);
+    SearchResult child_result = local_expansion->ResultFor(move);
+    pv_moves_.AddMove(move, 0);
+    if (child_result.Pn() == 0) {
+      child_result = ConstructProvenPv(node, child_result.Len());
+    } else if (child_result.Dn() == 0) {
+      if (!node.IsOrNode()) {
+        const Move evasion = GetEvasion(node);
+        pv_moves_.AddMove(evasion, 1);
+      }
+    }
+
+    if (child_result.IsFinal()) {
+      local_expansion->UpdateFinal(child_result, move);
+    }
+    pv_list_.Update(move, child_result, 0, pv_moves_.Moves());
+    if (i == 0 || SearchResultComparer{node.IsRootOrNode()}(child_result, best_child_result) ==
+                      SearchResultComparer::Ordering::kLess) {
+      best_child_result = child_result;
+
+      best_moves_ = pv_moves_.Moves();
+      score_ = score_maker_.Make(child_result, node.IsRootOrNode());
+      score_.AddOneIfFinal();
+    }
+    Print(node);
+
+    node.UndoMoveNoRepetition();
   }
+
+  expansion_list_[tl_thread_id].Pop();
 
   // 待機している sub thread を解放する
   should_break_main_loop_ = true;
@@ -167,7 +191,11 @@ void KomoringHeights::ResetFutures() {
 
 SearchResult KomoringHeights::SearchEntry(Node& n, MateLen len, std::uint32_t multi_pv) {
   expansion_list_[tl_thread_id].Emplace(tt_, n, len, true, multi_pv, len != MateLen::DepthMax());
+  Defer release_expansion([this]() { expansion_list_[tl_thread_id].Pop(); });
+  return SearchEntryNoEmplace(n);
+}
 
+SearchResult KomoringHeights::SearchEntryNoEmplace(Node& n) {
   PnDn thpn = (tl_thread_id + 1) * kPnDnUnit;
   PnDn thdn = (tl_thread_id + 1) * kPnDnUnit;
   SearchResult result;
@@ -184,8 +212,6 @@ SearchResult KomoringHeights::SearchEntry(Node& n, MateLen len, std::uint32_t mu
 
     std::tie(thpn, thdn) = NextPnDnThresholds(result.Pn(), result.Dn(), thpn, thdn);
   } while (!monitor_.ShouldStop() && thpn <= kInfinitePnDn && thdn <= kInfinitePnDn);
-
-  expansion_list_[tl_thread_id].Pop();
   return result;
 }
 
@@ -237,12 +263,6 @@ SearchResult KomoringHeights::ConstructProvenPv(Node& n, MateLen max_len) {
     }
   }
 
-  if (n.GetDepth() != n.Pos().state()->pliesFromNull) {
-    sync_cout << n.Pos() << sync_endl;
-    sync_cout << "info string depth mismatch: " << n.GetDepth() << " " << n.Pos().state()->pliesFromNull << sync_endl;
-    std::terminate();
-  }
-
   if (result.Dn() == 0) {
     // mate_len 以下の詰みがあるはずなので、ここに到達するのはおかしい
     n.UndoMoveNoRepetition();
@@ -280,33 +300,37 @@ SearchResult KomoringHeights::ConstructProvenPv(Node& n, MateLen max_len) {
     // もし差異があったら、現局面の詰み手数が間違っていた可能性があるのでもう一度探索する
   } while ((result.Len() != child_result.Len() + 1) && !monitor_.ShouldStop());
 
-  if (n.GetDepth() == 0 && !pv_moves_.Moves().empty()) {
-    // local_expansion があるうちに結果を print しておく
-    pv_list_.Update(pv_moves_.Moves().front(), result, 0, pv_moves_.Moves());
-    Print(n);
-  }
   return result;
 }
 
-void KomoringHeights::ConstructDisprovenPv(Node& n) {
-  const std::uint32_t multi_pv = 1;
-  expansion_list_[tl_thread_id].Emplace(tt_, n, MateLen::DepthMax(), false, multi_pv, true);
-  LocalExpansion& local_expansion = expansion_list_[tl_thread_id].back();
-  // early exit するときに忘れずに local_expansion を開放するための RAII
-  Defer release_expansion([this]() { expansion_list_[tl_thread_id].Pop(); });
-
-  const Move best_move = local_expansion.BestMove();
-  best_moves_ = {best_move};
-  if (n.IsOrNode()) {
-    n.DoMove(best_move);
-    if (const std::optional<Move> maybe_evasion = GetEvasion(tt_, n)) {
-      best_moves_.push_back(*maybe_evasion);
+Move KomoringHeights::GetEvasion(Node& n) {
+  expansion_list_[tl_thread_id].Emplace(tt_, n, MateLen::DepthMax(), false, 1, true);
+  LocalExpansion* local_expansion = &expansion_list_[tl_thread_id].back();
+  while (!monitor_.ShouldStop()) {
+    moves_from_root_ = pv_moves_.Moves();
+    mate_len_ = MateLen::DepthMax();
+    multi_pv_ = 1;
+    ResetFutures();
+    barrier_.Await();
+    SearchEntryNoEmplace(n);
+    monitor_.Stop();
+    for (int i = 1; i < option_.threads; ++i) {
+      search_futures_[i].wait();
     }
-    n.UndoMove();
+    monitor_.ResetStop();
+
+    if (local_expansion->CurrentResult(n).IsFinal()) {
+      break;
+    }
+
+    expansion_list_[tl_thread_id].Pop();
+    expansion_list_[tl_thread_id].Emplace(tt_, n, MateLen::DepthMax(), false, 1, true);
+    local_expansion = &expansion_list_[tl_thread_id].back();
   }
 
-  pv_list_.Update(best_move, local_expansion.CurrentResult(n), 0, best_moves_);
-  Print(n);
+  const Move evasion = local_expansion->BestMove();
+  expansion_list_[tl_thread_id].Pop();
+  return evasion;
 }
 
 SearchResult KomoringHeights::SearchImpl(Node& n, PnDn thpn, PnDn thdn, MateLen len, std::uint32_t& inc_flag) {
@@ -420,12 +444,6 @@ void KomoringHeights::Print(const Node& n) {
       const auto& pv = n.MovesFromStart();
       std::vector<Move> pv_moves(pv.begin(), pv.end());
       pv_list_.Update(root.BestMove(), result, n.GetDepth(), std::move(pv_moves));
-    } else {
-      const std::vector<Move>& pv_moves = pv_moves_.Moves();
-      if (!pv_moves.empty()) {
-        const Move best_move = pv_moves.front();
-        pv_list_.Update(best_move, result, pv_moves.size(), pv_moves);
-      }
     }
 
     info.Set(UsiInfoKey::kCurrMove, USI::move(root.BestMove()));
