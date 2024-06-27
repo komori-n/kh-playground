@@ -98,7 +98,14 @@ class KomoringHeights {
    * @pre 現局面が `mate_len` 手以下の詰みであること
    * @return 探索結果
    */
-  SearchResult ConstructPv(Node& n, MateLen max_len);
+  SearchResult ConstructProvenPv(Node& n, MateLen max_len);
+
+  /**
+   * @brief `n` に対し、不詰手順を `best_moves_` に格納する
+   * @param n 現局面
+   * @pre 現局面が不詰であること
+   */
+  void ConstructDisprovenPv(Node& n);
 
   /**
    * @brief 詰め探索の本体。（再帰関数）

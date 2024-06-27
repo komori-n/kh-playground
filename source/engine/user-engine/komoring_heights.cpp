@@ -118,14 +118,18 @@ NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_n
   }
   monitor_.ResetStop();
 
+  score_ = score_maker_.Make(result, node.IsRootOrNode());
   sync_cout << CurrentInfo() << result << sync_endl;
+
+  in_pv_search_ = true;
   if (result.Pn() == 0) {
     // pv作成
-    in_pv_search_ = true;
-    result = ConstructPv(node, result.Len());
+    result = ConstructProvenPv(node, result.Len());
     score_ = score_maker_.Make(result, node.IsRootOrNode());
 
     best_moves_ = pv_moves_.Moves();
+  } else if (result.Dn() == 0) {
+    ConstructDisprovenPv(node);
   }
 
   // 待機している sub thread を解放する
@@ -185,7 +189,7 @@ SearchResult KomoringHeights::SearchEntry(Node& n, MateLen len, std::uint32_t mu
   return result;
 }
 
-SearchResult KomoringHeights::ConstructPv(Node& n, MateLen max_len) {
+SearchResult KomoringHeights::ConstructProvenPv(Node& n, MateLen max_len) {
   // 証明駒を使わずにできるだけ短い詰みを LookUp してほしいので、strict_lookup=true にしている
   const std::uint32_t multi_pv = 1;
   expansion_list_[tl_thread_id].Emplace(tt_, n, max_len, false, multi_pv, true);
@@ -252,7 +256,7 @@ SearchResult KomoringHeights::ConstructPv(Node& n, MateLen max_len) {
     return result;
   }
 
-  if (n.IsOrNode()) {
+  if (n.IsOrNode() && n.GetDepth() > 0) {
     if (const auto [best_move, proof_hand] = CheckMate1Ply(n.Pos()); proof_hand != kNullHand) {
       pv_moves_.AddMove(best_move, n.GetDepth());
       return SearchResult::MakeFinal<true>(proof_hand, MateLen{1}, 1);
@@ -266,7 +270,7 @@ SearchResult KomoringHeights::ConstructPv(Node& n, MateLen max_len) {
 
     // DoMove() をするとループに遭遇したときに回避できないので、千日手判定なし版を使う
     n.DoMoveNoRepetition(best_move);
-    child_result = ConstructPv(n, result.Len() - 1);
+    child_result = ConstructProvenPv(n, result.Len() - 1);
     n.UndoMoveNoRepetition();
 
     local_expansion->UpdateBestChild(child_result);
@@ -282,6 +286,27 @@ SearchResult KomoringHeights::ConstructPv(Node& n, MateLen max_len) {
     Print(n);
   }
   return result;
+}
+
+void KomoringHeights::ConstructDisprovenPv(Node& n) {
+  const std::uint32_t multi_pv = 1;
+  expansion_list_[tl_thread_id].Emplace(tt_, n, MateLen::DepthMax(), false, multi_pv, true);
+  LocalExpansion& local_expansion = expansion_list_[tl_thread_id].back();
+  // early exit するときに忘れずに local_expansion を開放するための RAII
+  Defer release_expansion([this]() { expansion_list_[tl_thread_id].Pop(); });
+
+  const Move best_move = local_expansion.BestMove();
+  best_moves_ = {best_move};
+  if (n.IsOrNode()) {
+    n.DoMove(best_move);
+    if (const std::optional<Move> maybe_evasion = GetEvasion(tt_, n)) {
+      best_moves_.push_back(*maybe_evasion);
+    }
+    n.UndoMove();
+  }
+
+  pv_list_.Update(best_move, local_expansion.CurrentResult(n), 0, best_moves_);
+  Print(n);
 }
 
 SearchResult KomoringHeights::SearchImpl(Node& n, PnDn thpn, PnDn thdn, MateLen len, std::uint32_t& inc_flag) {
