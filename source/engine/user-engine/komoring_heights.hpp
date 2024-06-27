@@ -4,6 +4,7 @@
 #ifndef KOMORI_KOMORING_HEIGHTS_HPP_
 #define KOMORI_KOMORING_HEIGHTS_HPP_
 
+#include <future>
 #include <vector>
 
 #include "engine_option.hpp"
@@ -79,16 +80,7 @@ class KomoringHeights {
   NodeState SearchSubThread(const Position& n, bool is_root_or_node);
 
  private:
-  /**
-   * @brief 詰み手順を探す
-   * @param n 現局面
-   * @return 探索結果と詰み手数
-   *
-   * `SearchEntry()` や `SearchImpl()` のような df-pn 探索では「詰みかどうか」の探索は得意だが
-   * 「最短の詰み手順かどうか」の判定は難しい。この関数では、詰み手数を変えながら `SearchEntry()` を
-   * 呼ぶことで局面 `n` の詰み手数の区間を狭めていくことが目的の関数である。
-   */
-  std::pair<NodeState, MateLen> SearchMainLoop(Node& n);
+  void ResetFutures();
 
   /**
    * @brief 局面 `n` が `len` 手以下で詰むかどうかを探索する
@@ -132,12 +124,11 @@ class KomoringHeights {
 
   tt::TranspositionTable tt_;  ///< 置換表
   EngineOption option_;        ///< エンジンオプション
-  /// スレッド同期用バリア。await-a と await-b の 2 つのフェーズがある。
-  /// await-a ~ await-b: 探索中。各スレッドは moves_from_root_ と mate_len_ で指定された局面を探索する
-  ///                    探索が終わったら monitor_.Stop() を呼んですべてのスレッドを停止させる
-  /// await-b ~ await-a: 探索準備。メインスレッドが次に探索すべき局面を準備する。
-  ///                    それ以外のスレッドはただ待つだけ。
-  ///                    この区間はメインスレッド以外は停止しているので、特にメンバ変数の排他を取る必要はない。
+  /// スレッド同期用バリア
+  /// 各ループの末尾で全スレッドが待つために使用する。
+  ///
+  /// サブスレッドは、 search_promises_ に結果を書いた直後に barrier_ で待機する。
+  /// メインスレッドは、 search_futures_ で結果を受け取り、次に探索すべき局面を決めて barrier_ で全スレッドに通知する。
   Barrier barrier_;
 
   SearchMonitor monitor_;                                     ///< 探索モニター
@@ -153,10 +144,13 @@ class KomoringHeights {
   MovePath pv_moves_;         ///< PVの手順
 
   std::atomic<bool> should_break_main_loop_{false};  ///< メインループを抜けるかどうか
-  std::vector<Move> moves_from_root_;                ///< 探索開始局面
-  MateLen mate_len_{MateLen::Zero()};                ///< 探索手数
-  std::uint32_t multi_pv_{1};                        ///< Multi PV の数
-  std::vector<SearchResult> search_results_;         ///< 各スレッドの探索結果
+  // sub thread が探索すべき局面。サブスレッドは mutex で排他せずに読むため、メインスレッドから起床を命じるときは
+  // race condition にならないように注意する必要がある
+  std::vector<Move> moves_from_root_;                        ///< 探索開始局面
+  MateLen mate_len_{MateLen::Zero()};                        ///< 探索手数
+  std::uint32_t multi_pv_{1};                                ///< Multi PV の数
+  std::vector<std::promise<SearchResult>> search_promises_;  /// 各スレッドの探索結果を送る promise
+  std::vector<std::future<SearchResult>> search_futures_;    /// 各スレッドの探索結果を受け取る future
 };
 }  // namespace komori
 

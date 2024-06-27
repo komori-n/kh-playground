@@ -90,8 +90,10 @@ void KomoringHeights::NewSearch(const Position& n, bool is_root_or_node) {
   mate_len_ = MateLen::DepthMax();
   should_break_main_loop_.store(false, std::memory_order_relaxed);
   multi_pv_ = option_.multi_pv;
-  search_results_.resize(option_.threads);
-  search_results_.shrink_to_fit();
+
+  search_promises_.resize(option_.threads);
+  search_futures_.resize(option_.threads);
+  ResetFutures();
 }
 
 NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_node) {
@@ -99,23 +101,22 @@ NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_n
   Node node{nn, is_root_or_node};
 
   // ひとまず開始局面を探索する
-  barrier_.Await();  // await-a
-  search_results_[0] = SearchEntry(node, MateLen::DepthMax(), multi_pv_);
+  search_promises_[tl_thread_id].set_value(SearchEntry(node, MateLen::DepthMax(), multi_pv_));
   monitor_.Stop();
-  barrier_.Await();      // await-b
-  monitor_.ResetStop();  // stopフラグが立っているのでリセット
 
   // 全スレッドの探索結果をマージする。final な結果（=Stopの要因となった結果）の中で最もLessなものを選ぶ
   const SearchResultComparer comparer{node.IsOrNode()};
   bool is_first = true;
   SearchResult result;
   for (int i = 0; i < option_.threads; ++i) {
-    if (search_results_[i].IsFinal() &&
-        (is_first || comparer(search_results_[i], result) == SearchResultComparer::Ordering::kLess)) {
-      result = search_results_[i];
+    const SearchResult thread_result = search_futures_[i].get();
+    if (thread_result.IsFinal() &&
+        (is_first || comparer(thread_result, result) == SearchResultComparer::Ordering::kLess)) {
+      result = thread_result;
       is_first = false;
     }
   }
+  monitor_.ResetStop();
 
   sync_cout << CurrentInfo() << result << sync_endl;
   if (result.Pn() == 0) {
@@ -129,7 +130,7 @@ NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_n
 
   // 待機している sub thread を解放する
   should_break_main_loop_ = true;
-  barrier_.Await();  // await-a
+  barrier_.Await();
 
   return result.GetNodeState();
 }
@@ -138,21 +139,26 @@ NodeState KomoringHeights::SearchSubThread(const Position& n, bool is_root_or_no
   auto& nn = const_cast<Position&>(n);
   Node node{nn, is_root_or_node};
 
-  barrier_.Await();  // await-a
   while (!should_break_main_loop_) {
     // 探索本体
-    // await-a ~ await-b の区間は moves_from_root_ と mate_len_ は読み取り専用なので、排他を取る必要はない
     RollForward(node, moves_from_root_);
-    const SearchResult result = SearchEntry(node, mate_len_, multi_pv_);
-    search_results_[tl_thread_id] = result;
+    const SearchResult reuslt = SearchEntry(node, mate_len_, multi_pv_);
 
-    RollBack(node, moves_from_root_);
     monitor_.Stop();
-    barrier_.Await();  // await-b
+    RollBack(node, moves_from_root_);
+
+    search_promises_[tl_thread_id].set_value(reuslt);
     barrier_.Await();  // await-a
   }
 
   return NodeState::kUnknown;
+}
+
+void KomoringHeights::ResetFutures() {
+  for (int i = 0; i < option_.threads; ++i) {
+    search_promises_[i] = std::promise<SearchResult>{};
+    search_futures_[i] = search_promises_[i].get_future();
+  }
 }
 
 SearchResult KomoringHeights::SearchEntry(Node& n, MateLen len, std::uint32_t multi_pv) {
@@ -195,7 +201,8 @@ SearchResult KomoringHeights::ConstructPv(Node& n, MateLen max_len) {
     moves_from_root_ = pv_moves_.Moves();
     mate_len_ = max_len;
     multi_pv_ = multi_pv;
-    barrier_.Await();  // await-a
+    ResetFutures();
+    barrier_.Await();
 
     // 前の週で別スレッドが詰みを見つけているかもしれないので、改めて展開しなおす
     expansion_list_[tl_thread_id].Pop();
@@ -203,30 +210,26 @@ SearchResult KomoringHeights::ConstructPv(Node& n, MateLen max_len) {
 
     // expansion 済なので、SearchEntryではなく SearchImpl を呼ぶ
     std::uint32_t inc_flag = 0;
-    search_results_[tl_thread_id] = SearchImpl(n, kInfinitePnDn, kInfinitePnDn, max_len, inc_flag);
+    search_promises_[tl_thread_id].set_value(SearchImpl(n, kInfinitePnDn, kInfinitePnDn, max_len, inc_flag));
     monitor_.Stop();
-    barrier_.Await();  // await-b
-    monitor_.ResetStop();
 
     // sub thread の結果を result にコピーすることもできるが、メインスレッドの local expansion の状態が
     // 狂ってしまうので、あえて何もしない
     result = local_expansion->CurrentResult(n);
+    MateLen min_proven_len = MateLen::DepthMax();
+    for (int i = 0; i < option_.threads; ++i) {
+      const SearchResult thread_result = search_futures_[i].get();
+      if (thread_result.Pn() == 0) {
+        min_proven_len = std::min(min_proven_len, thread_result.Len());
+      }
+    }
+    monitor_.ResetStop();  // stopフラグが立っているのでリセット
 
     if (++loop_count % 30 == 0) {
       // 無駄合は確率で消える可能性があるので、max_len で詰むはずでも詰みを見つけれられないことがある。
       // そんなときは、詰み手数を伸ばして親局面から探索をやり直す
 
-      if (option_.threads > 1) {
-        MateLen new_max_len = MateLen::DepthMax();
-        for (int i = 0; i < option_.threads; ++i) {
-          if (search_results_[i].Pn() == 0) {
-            new_max_len = std::min(new_max_len, search_results_[i].Len());
-          }
-        }
-        max_len = new_max_len;
-      } else {
-        max_len = max_len + 2;
-      }
+      max_len = option_.threads == 1 ? max_len + 2 : min_proven_len;
     }
   }
 
