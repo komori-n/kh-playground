@@ -90,83 +90,99 @@ NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_n
   auto& nn = const_cast<Position&>(n);
   Node node{nn, is_root_or_node};
 
-  expansion_list_[tl_thread_id].Emplace(tt_, node, MateLen::DepthMax(), true, multi_pv_);
-  LocalExpansion* local_expansion = &expansion_list_[tl_thread_id].back();
-
-  SearchResult result;
-  while (!monitor_.ShouldStop()) {
-    result = SearchEntryNoEmplace(node);
-    monitor_.Stop();
-    for (int i = 1; i < option_.threads; ++i) {
-      search_futures_[i].wait();
-    }
-    monitor_.ResetStop();
-
-    if (result.IsFinal()) {
-      break;
-    }
-    expansion_list_[tl_thread_id].Pop();
-    expansion_list_[tl_thread_id].Emplace(tt_, node, MateLen::DepthMax(), false, multi_pv_, true);
-    local_expansion = &expansion_list_[tl_thread_id].back();
-
-    ResetFutures();
-    barrier_.Await();
-  }
-
-  score_ = score_maker_.Make(result, node.IsRootOrNode());
-  sync_cout << CurrentInfo() << result << sync_endl;
-
-  in_pv_search_ = true;
+  NodeState node_state = NodeState::kUnknown;
+  SearchResult best_child_result;
 
   std::vector<Move> searched_moves{};
-  SearchResult best_child_result;
-  const std::size_t loop_num = std::min<std::size_t>(local_expansion->Size(), option_.multi_pv);
-  for (std::size_t i = 0; i < loop_num && !monitor_.ShouldStop(); ++i) {
-    const Move move = SelectNextBestmove(*local_expansion, searched_moves);
-    searched_moves.push_back(move);
+  std::size_t num_found_win_moves = 0;
+  const std::size_t num_legal_moves = MovePicker{node}.size();
+  const std::size_t max_num_win_moves = std::min<std::size_t>(num_legal_moves, option_.multi_pv);
+  while (num_found_win_moves < max_num_win_moves && searched_moves.size() < num_legal_moves && !monitor_.ShouldStop()) {
+    multi_pv_ = num_found_win_moves + 1;
+    in_pv_search_ = false;
+    expansion_list_[tl_thread_id].Emplace(tt_, node, MateLen::DepthMax(), true, multi_pv_);
+    LocalExpansion* local_expansion = &expansion_list_[tl_thread_id].back();
 
-    node.DoMoveNoRepetition(move);
-    SearchResult child_result = local_expansion->ResultFor(move);
-    pv_moves_.AddMove(move, 0);
-    if (child_result.Pn() == 0) {
-      child_result = ConstructProvenPv(node, child_result.Len());
-    } else if (child_result.Dn() == 0) {
-      if (!node.IsOrNode()) {
-        const Move evasion = GetEvasion(node);
-        pv_moves_.AddMove(evasion, 1);
+    SearchResult result;
+    while (!monitor_.ShouldStop()) {
+      moves_from_root_.clear();
+      mate_len_ = MateLen::DepthMax();
+      ResetFutures();
+      barrier_.Await();
+      result = SearchEntryNoEmplace(node);
+      monitor_.Stop();
+      for (int i = 1; i < option_.threads; ++i) {
+        search_futures_[i].wait();
       }
+      monitor_.ResetStop();
+
+      if (result.IsFinal()) {
+        break;
+      }
+      expansion_list_[tl_thread_id].Pop();
+      expansion_list_[tl_thread_id].Emplace(tt_, node, MateLen::DepthMax(), false, multi_pv_);
+      local_expansion = &expansion_list_[tl_thread_id].back();
     }
 
-    if (child_result.IsFinal()) {
-      local_expansion->UpdateFinal(child_result, move);
-    }
-    pv_list_.Update(move, child_result, 0, pv_moves_.Moves());
-    if (i == 0 || SearchResultComparer{node.IsRootOrNode()}(child_result, best_child_result) ==
-                      SearchResultComparer::Ordering::kLess) {
-      best_child_result = child_result;
+    in_pv_search_ = true;
+    for (auto [move, child_result] : local_expansion->GetAllResults()) {
+      if (!child_result.IsFinal() ||
+          std::find(searched_moves.begin(), searched_moves.end(), move) != searched_moves.end()) {
+        continue;
+      }
+      searched_moves.push_back(move);
 
-      best_moves_ = pv_moves_.Moves();
-      score_ = score_maker_.Make(child_result, node.IsRootOrNode());
-      score_.AddOneIfFinal();
-    }
-    Print(node);
+      if (searched_moves.size() == 1) {
+        score_ = score_maker_.Make(child_result, node.IsRootOrNode());
+        score_.AddOneIfFinal();
+        node_state = child_result.GetNodeState();
+      }
+      sync_cout << CurrentInfo() << move << " " << child_result << sync_endl;
 
-    node.UndoMoveNoRepetition();
+      node.DoMoveNoRepetition(move);
+      pv_moves_.AddMove(move, 0);
+      if (child_result.Pn() == 0) {
+        ++num_found_win_moves;
+        child_result = ConstructProvenPv(node, child_result.Len());
+      } else if (child_result.Dn() == 0) {
+        if (!node.IsOrNode()) {
+          const Move evasion = GetEvasion(node);
+          pv_moves_.AddMove(evasion, 1);
+        }
+      }
+
+      if (child_result.IsFinal()) {
+        local_expansion->UpdateFinal(child_result, move);
+      }
+      pv_list_.Update(move, child_result, 0, pv_moves_.Moves());
+      if (searched_moves.size() == 1 || SearchResultComparer{node.IsRootOrNode()}(child_result, best_child_result) ==
+                                            SearchResultComparer::Ordering::kLess) {
+        best_child_result = child_result;
+
+        best_moves_ = pv_moves_.Moves();
+        score_ = score_maker_.Make(child_result, node.IsRootOrNode());
+        score_.AddOneIfFinal();
+      }
+      Print(node);
+
+      node.UndoMoveNoRepetition();
+    }
+
+    expansion_list_[tl_thread_id].Pop();
   }
-
-  expansion_list_[tl_thread_id].Pop();
 
   // 待機している sub thread を解放する
   should_break_main_loop_ = true;
   barrier_.Await();
 
-  return result.GetNodeState();
+  return node_state;
 }
 
 NodeState KomoringHeights::SearchSubThread(const Position& n, bool is_root_or_node) {
   auto& nn = const_cast<Position&>(n);
   Node node{nn, is_root_or_node};
 
+  barrier_.Await();
   while (!should_break_main_loop_) {
     // 探索本体
     RollForward(node, moves_from_root_);
@@ -176,7 +192,7 @@ NodeState KomoringHeights::SearchSubThread(const Position& n, bool is_root_or_no
     RollBack(node, moves_from_root_);
 
     search_promises_[tl_thread_id].set_value(reuslt);
-    barrier_.Await();  // await-a
+    barrier_.Await();
   }
 
   return NodeState::kUnknown;
