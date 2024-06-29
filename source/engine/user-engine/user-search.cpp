@@ -45,7 +45,20 @@ void PrintResult(bool is_mate_search, LoseKind kind, const std::string& pv_moves
         sync_cout << "checkmate nomate" << sync_endl;
         break;
       default:
-        sync_cout << "checkmate " << pv_moves << sync_endl;
+        if (!pv_moves.empty()) {
+          sync_cout << "checkmate " << pv_moves << sync_endl;
+        } else {
+          // USIプロトコルでは、現局面で詰みのときに何を返せばよいか規定されていない。
+          // 以下、「checkmate XXX」を返したときの主要なGUIの挙動を示す。
+          //
+          // - (何も返さない)   -> エラーになってしまう
+          // - null/none/resign -> 無効な指し手扱いでエラーになってしまう
+          // - 自殺手           -> 無効な指し手扱いでエラーになってしまう
+          // - timeout          -> go mate infinite で探索していたらエラーになってしまう
+          //
+          // よって、現局面詰みのときに返せるいい感じの指し手はない。しょうがないので nomate を返す。
+          sync_cout << "checkmate nomate" << sync_endl;
+        }
     }
   } else {
     // `KomoringHeights::Search()` 内で出力しているはずなので、ここでは何もする必要がない。

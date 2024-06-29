@@ -166,6 +166,10 @@ NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_n
   should_break_main_loop_ = true;
   barrier_.Await();
 
+  if (num_legal_moves == 0) {
+    node_state = node.IsOrNode() ? NodeState::kDisproven : NodeState::kProven;
+  }
+
   return node_state;
 }
 
