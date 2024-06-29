@@ -345,7 +345,7 @@ SearchResult KomoringHeights::SearchImpl(Node& n, PnDn thpn, PnDn thdn, MateLen 
     Print(n);
   }
 
-  if (n.GetDepth() >= kDepthMax) {
+  if (n.GetDepth() >= kDepthMax - 1) {
     return SearchResult::MakeRepetition(n.OrHand(), len, 1, 0);
   }
 
