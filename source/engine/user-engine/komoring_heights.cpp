@@ -83,7 +83,6 @@ void KomoringHeights::NewSearch(const Position& n, bool is_root_or_node) {
 
   search_promises_.resize(option_.threads);
   search_futures_.resize(option_.threads);
-  ResetFutures();
 }
 
 NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_node) {
@@ -98,29 +97,21 @@ NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_n
   const std::size_t num_legal_moves = MovePicker{node}.size();
   const std::size_t max_num_win_moves = std::min<std::size_t>(num_legal_moves, option_.multi_pv);
   while (num_found_win_moves < max_num_win_moves && searched_moves.size() < num_legal_moves && !monitor_.ShouldStop()) {
-    multi_pv_ = num_found_win_moves + 1;
+    const std::uint32_t multi_pv = num_found_win_moves + 1;
     in_pv_search_ = false;
-    expansion_list_[tl_thread_id].Emplace(tt_, node, MateLen::DepthMax(), true, multi_pv_);
+    expansion_list_[tl_thread_id].Emplace(tt_, node, MateLen::DepthMax(), true, multi_pv);
     LocalExpansion* local_expansion = &expansion_list_[tl_thread_id].back();
 
     SearchResult result;
     while (!monitor_.ShouldStop()) {
-      moves_from_root_.clear();
-      mate_len_ = MateLen::DepthMax();
-      ResetFutures();
-      barrier_.Await();
-      result = SearchEntryNoEmplace(node);
-      monitor_.Stop();
-      for (int i = 1; i < option_.threads; ++i) {
-        search_futures_[i].wait();
-      }
-      monitor_.ResetStop();
+      DispatchSearch(node, MateLen::DepthMax(), multi_pv);
+      result = local_expansion->CurrentResult(node);
 
       if (result.IsFinal()) {
         break;
       }
       expansion_list_[tl_thread_id].Pop();
-      expansion_list_[tl_thread_id].Emplace(tt_, node, MateLen::DepthMax(), false, multi_pv_);
+      expansion_list_[tl_thread_id].Emplace(tt_, node, MateLen::DepthMax(), false, multi_pv);
       local_expansion = &expansion_list_[tl_thread_id].back();
     }
 
@@ -198,26 +189,45 @@ NodeState KomoringHeights::SearchSubThread(const Position& n, bool is_root_or_no
   return NodeState::kUnknown;
 }
 
-void KomoringHeights::ResetFutures() {
+MateLen KomoringHeights::DispatchSearch(Node& n, MateLen len, std::uint32_t multi_pv) {
+  const auto& moves = n.MovesFromStart();
+  moves_from_root_ = {moves.begin(), moves.end()};
+  mate_len_ = len;
+  multi_pv_ = multi_pv;
+
   for (int i = 0; i < option_.threads; ++i) {
     search_promises_[i] = std::promise<SearchResult>{};
     search_futures_[i] = search_promises_[i].get_future();
   }
+  barrier_.Await();
+  search_promises_[tl_thread_id].set_value(SearchEntryNoEmplace(n, len));
+  monitor_.Stop();
+
+  MateLen result_len = MateLen::DepthMax();
+  for (int i = 0; i < option_.threads; ++i) {
+    const SearchResult thread_result = search_futures_[i].get();
+    if (thread_result.Pn() == 0) {
+      result_len = std::min(result_len, thread_result.Len());
+    }
+  }
+  monitor_.ResetStop();
+
+  return result_len;
 }
 
 SearchResult KomoringHeights::SearchEntry(Node& n, MateLen len, std::uint32_t multi_pv) {
   expansion_list_[tl_thread_id].Emplace(tt_, n, len, true, multi_pv, len != MateLen::DepthMax());
   Defer release_expansion([this]() { expansion_list_[tl_thread_id].Pop(); });
-  return SearchEntryNoEmplace(n);
+  return SearchEntryNoEmplace(n, len);
 }
 
-SearchResult KomoringHeights::SearchEntryNoEmplace(Node& n) {
+SearchResult KomoringHeights::SearchEntryNoEmplace(Node& n, MateLen max_len) {
   PnDn thpn = (tl_thread_id + 1) * kPnDnUnit;
   PnDn thdn = (tl_thread_id + 1) * kPnDnUnit;
   SearchResult result;
   do {
     std::uint32_t inc_flag = 0;
-    result = SearchImpl(n, thpn, thdn, MateLen::DepthMax(), inc_flag);
+    result = SearchImpl(n, thpn, thdn, max_len, inc_flag);
     if (result.IsFinal()) {
       break;
     }
@@ -243,45 +253,27 @@ SearchResult KomoringHeights::ConstructProvenPv(Node& n, MateLen max_len) {
   std::uint32_t loop_count = 0;
   while (!result.IsFinal() && !monitor_.ShouldStop()) {
     // mate_len 以下の詰みがあるはずなので頑張って探す
-    // sub thread たちにも `moves_from_root_` 以下 `mate_len_` 手詰めを見つけるのを手伝ってもらう
-    moves_from_root_ = pv_moves_.Moves();
-    mate_len_ = max_len;
-    multi_pv_ = multi_pv;
-    ResetFutures();
-    barrier_.Await();
-
     // 前の週で別スレッドが詰みを見つけているかもしれないので、改めて展開しなおす
     expansion_list_[tl_thread_id].Pop();
     expansion_list_[tl_thread_id].Emplace(tt_, n, max_len, false, multi_pv, true);
 
-    // expansion 済なので、SearchEntryではなく SearchImpl を呼ぶ
-    std::uint32_t inc_flag = 0;
-    search_promises_[tl_thread_id].set_value(SearchImpl(n, kInfinitePnDn, kInfinitePnDn, max_len, inc_flag));
-    monitor_.Stop();
+    // sub thread たちにも `n` 以下 `mate_len_` 手詰めを見つけるのを手伝ってもらう
+    const MateLen max_mate_len = DispatchSearch(n, max_len, multi_pv);
 
     // sub thread の結果を result にコピーすることもできるが、メインスレッドの local expansion の状態が
     // 狂ってしまうので、あえて何もしない
     result = local_expansion->CurrentResult(n);
-    MateLen min_proven_len = MateLen::DepthMax();
-    for (int i = 0; i < option_.threads; ++i) {
-      const SearchResult thread_result = search_futures_[i].get();
-      if (thread_result.Pn() == 0) {
-        min_proven_len = std::min(min_proven_len, thread_result.Len());
-      }
-    }
-    monitor_.ResetStop();  // stopフラグが立っているのでリセット
 
     if (++loop_count % 30 == 0) {
       // 無駄合は確率で消える可能性があるので、max_len で詰むはずでも詰みを見つけれられないことがある。
       // そんなときは、詰み手数を伸ばして親局面から探索をやり直す
 
-      max_len = option_.threads == 1 ? max_len + 2 : min_proven_len;
+      max_len = option_.threads == 1 ? max_len + 2 : max_mate_len;
     }
   }
 
   if (result.Dn() == 0) {
     // mate_len 以下の詰みがあるはずなので、ここに到達するのはおかしい
-    n.UndoMoveNoRepetition();
     sync_cout << n.GetDepth() << " " << n.Pos() << sync_endl;
     sync_cout << "info string unexpected disproven: " << result << sync_endl;
     std::terminate();
@@ -323,18 +315,7 @@ Move KomoringHeights::GetEvasion(Node& n) {
   expansion_list_[tl_thread_id].Emplace(tt_, n, MateLen::DepthMax(), false, 1, true);
   LocalExpansion* local_expansion = &expansion_list_[tl_thread_id].back();
   while (!monitor_.ShouldStop()) {
-    moves_from_root_ = pv_moves_.Moves();
-    mate_len_ = MateLen::DepthMax();
-    multi_pv_ = 1;
-    ResetFutures();
-    barrier_.Await();
-    SearchEntryNoEmplace(n);
-    monitor_.Stop();
-    for (int i = 1; i < option_.threads; ++i) {
-      search_futures_[i].wait();
-    }
-    monitor_.ResetStop();
-
+    DispatchSearch(n, MateLen::DepthMax(), 1);
     if (local_expansion->CurrentResult(n).IsFinal()) {
       break;
     }

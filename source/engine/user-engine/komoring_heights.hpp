@@ -80,7 +80,16 @@ class KomoringHeights {
   NodeState SearchSubThread(const Position& n, bool is_root_or_node);
 
  private:
-  void ResetFutures();
+  /**
+   * @brief 全スレッドに対し、`n` の探索を命じて探索を行う
+   * @param n 現局面
+   * @param len 詰み手数
+   * @param multi_pv Multi PV の数
+   * @return 詰みの場合は詰み手数、詰まない場合は `MateLen::kInfinite`
+   * @pre メインスレッドから呼び出すこと
+   * @pre `n` は LocalExpansion が展開されていること
+   */
+  MateLen DispatchSearch(Node& n, MateLen len, std::uint32_t multi_pv);
 
   /**
    * @brief 局面 `n` が `len` 手以下で詰むかどうかを探索する
@@ -97,7 +106,7 @@ class KomoringHeights {
    * @param n 現局面
    * @return 探索結果
    */
-  SearchResult SearchEntryNoEmplace(Node& n);
+  SearchResult SearchEntryNoEmplace(Node& n, MateLen max_len);
 
   /**
    * @brief `n` に対し `mate_len` 手以下の詰み手順を `pv_moves_` に格納する
@@ -154,7 +163,6 @@ class KomoringHeights {
   std::vector<InlineStack<LocalExpansion, kDepthMax>> expansion_list_{};  ///< スレッドごとの局面展開のための一時領域
   Score score_{};  ///< 現在の探索評価値。余詰探索中に CurrentInfo() で取得できるようにここにおいておく
 
-  std::mutex mutex_;          ///< pv_list_ の排他制御のための mutex
   PvList pv_list_;            ///< 各手に対する PV の一覧
   bool in_pv_search_{false};  ///< PV探索中かどうか
   MovePath pv_moves_;         ///< PVの手順
