@@ -2,7 +2,9 @@
 
 #include "../ttentry.hpp"
 #include "test_lib.hpp"
+#include "typedefs.hpp"
 
+using komori::kDepthMax;
 using komori::MateLen;
 using komori::PnDn;
 using komori::SearchAmount;
@@ -16,14 +18,14 @@ TEST(EntryTest, DefaultConstructedInstanceIsNull) {
 
 TEST(EntryTest, Init_PossibleRepetition) {
   Entry entry;
-  entry.Init(0x334334, HAND_ZERO);
+  entry.Init(0x334334, HAND_ZERO, kDepthMax);
 
   EXPECT_FALSE(entry.IsPossibleRepetition());
 }
 
 TEST(EntryTest, SetPossibleRepetition_PossibleRepetition) {
   Entry entry;
-  entry.Init(0x334334, HAND_ZERO);
+  entry.Init(0x334334, HAND_ZERO, kDepthMax);
   entry.SetPossibleRepetition();
 
   EXPECT_TRUE(entry.IsPossibleRepetition());
@@ -33,7 +35,7 @@ TEST(EntryTest, IsFor) {
   Entry entry;
   const Key key{0x334334};
   const Hand hand{MakeHand<PAWN, LANCE>()};
-  entry.Init(key, hand);
+  entry.Init(key, hand, kDepthMax);
 
   EXPECT_TRUE(entry.IsFor(key));
   EXPECT_FALSE(entry.IsFor(0x264264));
@@ -46,13 +48,13 @@ TEST(EntryTest, GetHand) {
   Entry entry;
   const Key key{0x334334};
   const Hand hand{MakeHand<PAWN, LANCE>()};
-  entry.Init(key, hand);
+  entry.Init(key, hand, kDepthMax);
   EXPECT_EQ(entry.GetHand(), hand);
 }
 
 TEST(EntryTest, CutAmount) {
   Entry entry;
-  entry.Init(0x334, HAND_ZERO);
+  entry.Init(0x334, HAND_ZERO, kDepthMax);
   entry.CutAmount();
   EXPECT_GT(entry.Amount(), 0);
 
@@ -67,12 +69,12 @@ TEST(EntryTest, UpdateUnknown_MinDepth) {
   const Depth depth1{334};
   const Depth depth2{264};
 
-  entry.Init(0x264, HAND_ZERO);
+  entry.Init(0x264, HAND_ZERO, kDepthMax);
   entry.UpdateUnknown(depth1, 1, 1, 1);
   entry.UpdateUnknown(depth2, 1, 1, 1);
   EXPECT_EQ(entry.MinDepth(), depth2);
 
-  entry.Init(0x264, HAND_ZERO);
+  entry.Init(0x264, HAND_ZERO, kDepthMax);
   entry.UpdateUnknown(depth2, 1, 1, 1);
   entry.UpdateUnknown(depth1, 1, 1, 1);
   EXPECT_EQ(entry.MinDepth(), depth2);
@@ -88,7 +90,7 @@ TEST(EntryTest, LookUp_MinDepth) {
   MateLen len{334};
   bool use_old_child{false};
 
-  entry.Init(0x264, hand);
+  entry.Init(0x264, hand, kDepthMax);
   entry.UpdateUnknown(depth1, 1, 1, 1);
   entry.LookUp(MakeHand<PAWN, LANCE>(), depth2, len, pn, dn, use_old_child);
   EXPECT_EQ(entry.MinDepth(), depth1);  // 劣等局面では depth を更新しない
@@ -109,7 +111,7 @@ TEST(EntryTest, LookUp_PnDn_Exact) {
   MateLen len{334};
   bool use_old_child{false};
 
-  entry.Init(0x264, hand);
+  entry.Init(0x264, hand, kDepthMax);
   entry.UpdateUnknown(depth1, 33, 4, 1);
   const auto ret1 = entry.LookUp(hand, depth1, len, pn, dn, use_old_child);
   EXPECT_TRUE(ret1);
@@ -140,7 +142,7 @@ TEST(EntryTest, LookUp_PnDn_Superior) {
   MateLen len{334};
   bool use_old_child{false};
 
-  entry.Init(0x264, hand1);
+  entry.Init(0x264, hand1, kDepthMax);
   entry.UpdateUnknown(depth1, 33, 4, 1);
   const auto ret1 = entry.LookUp(hand2, depth2, len, pn, dn, use_old_child);
   EXPECT_TRUE(ret1);
@@ -171,7 +173,7 @@ TEST(EntryTest, LookUp_PnDn_Inferior) {
   MateLen len{334};
   bool use_old_child{false};
 
-  entry.Init(0x264, hand1);
+  entry.Init(0x264, hand1, kDepthMax);
   entry.UpdateUnknown(depth1, 33, 4, 1);
   const auto ret1 = entry.LookUp(hand2, depth2, len, pn, dn, use_old_child);
   EXPECT_TRUE(ret1);
@@ -202,7 +204,7 @@ TEST(EntryTest, LookUp_PnDn_Proven) {
   MateLen len{len2};
   bool use_old_child{false};
 
-  entry.Init(0x264, hand1);
+  entry.Init(0x264, hand1, kDepthMax);
   entry.UpdateProven(len1, 1);
   // 現局面と一致
   const auto ret = entry.LookUp(hand1, depth, len, pn, dn, use_old_child);
@@ -228,7 +230,7 @@ TEST(EntryTest, LookUp_PnDn_Disproven) {
   MateLen len{len2};
   bool use_old_child{false};
 
-  entry.Init(0x264, hand1);
+  entry.Init(0x264, hand1, kDepthMax);
   entry.UpdateDisproven(1);
   const auto ret = entry.LookUp(hand1, depth, len, pn, dn, use_old_child);
   EXPECT_TRUE(ret);
@@ -244,7 +246,7 @@ TEST(EntryTest, LookUp_PnDn_Disproven) {
 
 TEST(EntryTest, SetPossibleRepetition_PnDn) {
   Entry entry;
-  entry.Init(0x264, HAND_ZERO);
+  entry.Init(0x264, HAND_ZERO, kDepthMax);
   entry.UpdateUnknown(334, 33, 4, 1);
   entry.SetPossibleRepetition();
   EXPECT_EQ(entry.Pn(), 1);
@@ -253,7 +255,7 @@ TEST(EntryTest, SetPossibleRepetition_PnDn) {
 
 TEST(EntryTest, Init_ProvenLen) {
   Entry entry;
-  entry.Init(0x264, HAND_ZERO);
+  entry.Init(0x264, HAND_ZERO, kDepthMax);
   EXPECT_EQ(entry.ProvenLen(), MateLen::Max());
 }
 
@@ -262,7 +264,7 @@ TEST(EntryTest, UpdateProven_ProvenLen) {
   const MateLen len1{334};
   const MateLen len2{3340};
   const MateLen len3{264};
-  entry.Init(0x264, HAND_ZERO);
+  entry.Init(0x264, HAND_ZERO, kDepthMax);
   entry.UpdateProven(len1, 1);
   EXPECT_EQ(entry.ProvenLen(), len1);
 
@@ -284,7 +286,7 @@ TEST(EntryTest, LookUp_UseOldChild_Superior) {
   MateLen len{334};
   bool use_old_child{false};
 
-  entry.Init(0x264, hand1);
+  entry.Init(0x264, hand1, kDepthMax);
   entry.UpdateUnknown(depth1, 33, 4, 1);
   entry.LookUp(hand2, depth2, len, pn, dn, use_old_child);
   EXPECT_TRUE(use_old_child);
@@ -305,7 +307,7 @@ TEST(EntryTest, LookUp_UseOldChild_Inferior) {
   MateLen len{334};
   bool use_old_child{false};
 
-  entry.Init(0x264, hand1);
+  entry.Init(0x264, hand1, kDepthMax);
   entry.UpdateUnknown(depth1, 33, 4, 1);
   entry.LookUp(hand2, depth2, len, pn, dn, use_old_child);
   EXPECT_TRUE(use_old_child);
@@ -318,7 +320,7 @@ TEST(EntryTest, LookUp_UseOldChild_Inferior) {
 TEST(EntryTest, UpdateUnknown_Amount) {
   Entry entry;
   const SearchAmount amount{334};
-  entry.Init(0x264, HAND_ZERO);
+  entry.Init(0x264, HAND_ZERO, kDepthMax);
   entry.UpdateUnknown(264, 26, 4, amount);
   EXPECT_EQ(entry.Amount(), 1 / 2 + amount);
 }
@@ -326,7 +328,7 @@ TEST(EntryTest, UpdateUnknown_Amount) {
 TEST(EntryTest, UpdateUnknown_SaturatedAmount) {
   Entry entry;
   const SearchAmount amount{std::numeric_limits<SearchAmount>::max()};
-  entry.Init(0x264, HAND_ZERO);
+  entry.Init(0x264, HAND_ZERO, kDepthMax);
   entry.UpdateUnknown(264, 26, 4, amount);
   EXPECT_EQ(entry.Amount(), amount);
 }
@@ -335,7 +337,7 @@ TEST(EntryTest, UpdateProven_Amount) {
   Entry entry;
   const SearchAmount amount1{334};
   const SearchAmount amount2{264};
-  entry.Init(0x264, HAND_ZERO);
+  entry.Init(0x264, HAND_ZERO, kDepthMax);
   entry.UpdateUnknown(264, 26, 4, amount1);
   entry.UpdateProven(MateLen{334}, amount2);
   EXPECT_EQ(entry.Amount(), amount2 + 334 * kFinalAmountBonus);
@@ -345,7 +347,7 @@ TEST(EntryTest, UpdateDisproven_Amount) {
   Entry entry;
   const SearchAmount amount1{334};
   const SearchAmount amount2{264};
-  entry.Init(0x264, HAND_ZERO);
+  entry.Init(0x264, HAND_ZERO, kDepthMax);
   entry.UpdateUnknown(264, 26, 4, amount1);
   entry.UpdateDisproven(amount2);
   EXPECT_EQ(entry.Amount(), amount2 + 10 * kFinalAmountBonus);

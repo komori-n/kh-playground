@@ -2,6 +2,9 @@
 
 #include "../regular_table.hpp"
 #include "test_lib.hpp"
+#include "typedefs.hpp"
+
+using komori::kDepthMax;
 
 namespace {
 class CircularEntryPointerTest : public ::testing::Test {
@@ -67,7 +70,7 @@ TEST_F(RegularTableTest, Resize_ChangeSize) {
 
 TEST_F(RegularTableTest, Resize_ClearEntries) {
   auto& front = *tt_.begin();
-  front.Init(0x334, HAND_ZERO);
+  front.Init(0x334, HAND_ZERO, kDepthMax);
 
   EXPECT_FALSE(front.IsNull());
   tt_.Resize(334);
@@ -77,7 +80,7 @@ TEST_F(RegularTableTest, Resize_ClearEntries) {
 
 TEST_F(RegularTableTest, Clear) {
   auto& front = *tt_.begin();
-  front.Init(0x334, HAND_ZERO);
+  front.Init(0x334, HAND_ZERO, kDepthMax);
 
   EXPECT_FALSE(front.IsNull());
   tt_.Clear();
@@ -95,7 +98,7 @@ TEST_F(RegularTableTest, PointerOf) {
 
 TEST_F(RegularTableTest, CalculateHashRate_EmptyAfterClear) {
   for (auto&& entry : tt_) {
-    entry.Init(0x334, HAND_ZERO);
+    entry.Init(0x334, HAND_ZERO, kDepthMax);
   }
 
   EXPECT_GT(tt_.CalculateHashRate(), 0);
@@ -105,7 +108,7 @@ TEST_F(RegularTableTest, CalculateHashRate_EmptyAfterClear) {
 
 TEST_F(RegularTableTest, CalculateHashRate_Full) {
   for (auto&& entry : tt_) {
-    entry.Init(0x334, HAND_ZERO);
+    entry.Init(0x334, HAND_ZERO, kDepthMax);
   }
 
   EXPECT_EQ(tt_.CalculateHashRate(), 1.0);
@@ -119,7 +122,7 @@ TEST_F(RegularTableTest, CollectGarbage) {
 
   komori::SearchAmount i = 1;
   for (auto&& entry : tt_) {
-    entry.Init(0x334, HAND_ZERO);
+    entry.Init(0x334, HAND_ZERO, kDepthMax);
     entry.UpdateUnknown(0, 3, 3, i++);
   }
 
@@ -130,7 +133,7 @@ TEST_F(RegularTableTest, CollectGarbage) {
 }
 
 TEST_F(RegularTableTest, CompactEntries) {
-  tt_.begin()->Init(std::numeric_limits<Key>::max(), HAND_ZERO);
+  tt_.begin()->Init(std::numeric_limits<Key>::max(), HAND_ZERO, kDepthMax);
   EXPECT_FALSE(tt_.begin()->IsNull());
   tt_.CompactEntries();
   EXPECT_TRUE(tt_.begin()->IsNull());
@@ -144,10 +147,10 @@ TEST_F(RegularTableTest, SaveLoad) {
   const auto hand2 = MakeHand<PAWN>();
 
   auto p1 = tt_.PointerOf(board_key1);
-  p1->Init(board_key1, hand1);
+  p1->Init(board_key1, hand1, kDepthMax);
   p1->UpdateUnknown(334, 1, 1, komori::tt::detail::kTTSaveAmountThreshold + 1);
   auto p2 = tt_.PointerOf(board_key2);
-  p2->Init(board_key2, hand2);
+  p2->Init(board_key2, hand2, kDepthMax);
   p2->UpdateUnknown(334, 1, 1, komori::tt::detail::kTTSaveAmountThreshold - 1);
   ASSERT_NE(&*p1, &*p2);
 
@@ -158,7 +161,7 @@ TEST_F(RegularTableTest, SaveLoad) {
   EXPECT_FALSE(p2->IsFor(board_key2, hand2));
 
   // p1 の位置に entry2 を書き込む。次の load 後には entry2, entry1 の順に並ぶはず
-  p1->Init(board_key2, hand2);
+  p1->Init(board_key2, hand2, kDepthMax);
 
   tt_.Load(ss);
   EXPECT_TRUE(p1->IsFor(board_key2, hand2));

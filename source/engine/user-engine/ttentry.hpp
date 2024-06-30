@@ -166,8 +166,9 @@ class alignas(32) Entry {
    * @brief エントリの初期化を行う
    * @param board_key 盤面ハッシュ値
    * @param hand      持ち駒
+   * @param depth     探索深さ
    */
-  void Init(Key board_key, Hand hand) noexcept {
+  void Init(Key board_key, Hand hand, Depth depth) noexcept {
     hand_.store(hand, std::memory_order_relaxed);
     amount_ = 1;
     board_key_ = board_key;
@@ -176,7 +177,7 @@ class alignas(32) Entry {
     pn_ = 1;
     dn_ = 1;
     repetition_state_ = RepetitionState::kNone;
-    min_depth_.store(static_cast<std::int16_t>(kDepthMax), std::memory_order_relaxed);
+    min_depth_.store(static_cast<std::int16_t>(depth), std::memory_order_relaxed);
   }
 
   /// エントリの排他ロックを取る

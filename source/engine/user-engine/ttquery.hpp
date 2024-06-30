@@ -205,7 +205,7 @@ class Query {
     for (auto itr = initial_entry_pointer_;; ++itr) {
       itr->lock();
       if (itr->IsNull()) {
-        itr->Init(board_key_, hand);
+        itr->Init(board_key_, hand, depth_);
         return cached_entry_ = &*itr;
       }
 

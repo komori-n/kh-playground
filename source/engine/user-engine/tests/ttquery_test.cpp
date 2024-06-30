@@ -6,6 +6,7 @@
 #include "test_lib.hpp"
 
 using komori::FinalData;
+using komori::kDepthMax;
 using komori::kInfinitePnDn;
 using komori::kPnDnUnit;
 using komori::MateLen;
@@ -57,7 +58,7 @@ TEST_F(QueryTest, LoopUp_UnknownExact) {
     const PnDn dn{static_cast<PnDn>(4 * (i + 1))};
     const SearchAmount amount{334};
 
-    entries_[i].Init(board_key_, hand_);
+    entries_[i].Init(board_key_, hand_, kDepthMax);
     entries_[i].UpdateUnknown(depth_, pn, dn, amount);
 
     bool does_have_old_child{false};
@@ -67,7 +68,7 @@ TEST_F(QueryTest, LoopUp_UnknownExact) {
     EXPECT_EQ(result.Dn(), dn) << i;
     EXPECT_EQ(result.Amount(), entries_[i].Amount()) << i;
 
-    entries_[i].Init(0x264, HAND_ZERO);
+    entries_[i].Init(0x264, HAND_ZERO, kDepthMax);
   }
 }
 
@@ -77,7 +78,7 @@ TEST_F(QueryTest, LoopUp_UnknownExactRepetition) {
   const PnDn pn{33};
   const PnDn dn{4};
 
-  entries_[0].Init(board_key_, hand_);
+  entries_[0].Init(board_key_, hand_, kDepthMax);
   entries_[0].SetPossibleRepetition();
   entries_[0].UpdateUnknown(depth_, pn, dn, 1);
 
@@ -96,7 +97,7 @@ TEST_F(QueryTest, LoopUp_UnknownExactNoRepetition) {
   const PnDn dn{4};
   const SearchAmount amount{334};
 
-  entries_[0].Init(board_key_, hand_);
+  entries_[0].Init(board_key_, hand_, kDepthMax);
   entries_[0].UpdateUnknown(depth_, pn, dn, amount);
   entries_[0].SetPossibleRepetition();
   entries_[0].UpdateUnknown(board_key_, pn, dn, 1);
@@ -114,7 +115,7 @@ TEST_F(QueryTest, LoopUp_DifferentBoardKey) {
   const PnDn dn{4};
   const SearchAmount amount{334};
 
-  entries_[0].Init(board_key_ ^ 0x01, hand_);
+  entries_[0].Init(board_key_ ^ 0x01, hand_, kDepthMax);
   entries_[0].UpdateUnknown(depth_, pn, dn, amount);
 
   bool does_have_old_child{false};
@@ -130,7 +131,7 @@ TEST_F(QueryTest, LoopUp_DifferentHand) {
   const PnDn dn{4};
   const SearchAmount amount{334};
 
-  entries_[0].Init(board_key_, MakeHand<GOLD>());
+  entries_[0].Init(board_key_, MakeHand<GOLD>(), kDepthMax);
   entries_[0].UpdateUnknown(depth_, pn, dn, amount);
 
   bool does_have_old_child{false};
@@ -146,7 +147,7 @@ TEST_F(QueryTest, LoopUp_UnknownSuperior) {
   const PnDn dn{4};
   const SearchAmount amount{334};
 
-  entries_[0].Init(board_key_, MakeHand<PAWN>());
+  entries_[0].Init(board_key_, MakeHand<PAWN>(), kDepthMax);
   entries_[0].UpdateUnknown(depth_, pn, dn, amount);
 
   bool does_have_old_child{false};
@@ -162,7 +163,7 @@ TEST_F(QueryTest, LoopUp_UnknownInferior) {
   const PnDn dn{4};
   const SearchAmount amount{334};
 
-  entries_[0].Init(board_key_, MakeHand<PAWN, LANCE, LANCE, GOLD>());
+  entries_[0].Init(board_key_, MakeHand<PAWN, LANCE, LANCE, GOLD>(), kDepthMax);
   entries_[0].UpdateUnknown(depth_, pn, dn, amount);
 
   bool does_have_old_child{false};
@@ -177,7 +178,7 @@ TEST_F(QueryTest, LoopUp_UnknownInferior) {
 
 TEST_F(QueryTest, LoopUp_Proven) {
   const auto hand = MakeHand<PAWN>();
-  entries_[0].Init(board_key_, hand);
+  entries_[0].Init(board_key_, hand, kDepthMax);
   entries_[0].UpdateProven(MateLen{264}, 1);
 
   bool does_have_old_child{false};
@@ -192,7 +193,7 @@ TEST_F(QueryTest, LoopUp_Proven) {
 
 TEST_F(QueryTest, LoopUp_Disproven) {
   const auto hand = MakeHand<PAWN, LANCE, LANCE, LANCE>();
-  entries_[0].Init(board_key_, hand);
+  entries_[0].Init(board_key_, hand, kDepthMax);
   entries_[0].UpdateDisproven(1);
 
   bool does_have_old_child{false};
@@ -222,7 +223,7 @@ TEST_F(QueryTest, SetResult_UnknownUpdate) {
     const PnDn pn{static_cast<PnDn>(33 * (i + 1))};
     const PnDn dn{static_cast<PnDn>(4 * (i + 1))};
     const SearchAmount amount{static_cast<SearchAmount>(334 * (i + 1))};
-    entries_[i].Init(board_key_, hand_);
+    entries_[i].Init(board_key_, hand_, kDepthMax);
 
     const SearchResult result = SearchResult::MakeFirstVisit(pn, dn, MateLen{334}, amount);
 
@@ -231,7 +232,7 @@ TEST_F(QueryTest, SetResult_UnknownUpdate) {
     EXPECT_EQ(entries_[i].Dn(), dn) << i;
     EXPECT_EQ(entries_[i].Amount(), 1 / 2 + amount) << i;
 
-    entries_[i].Init(0x264, HAND_ZERO);
+    entries_[i].Init(0x264, HAND_ZERO, kDepthMax);
   }
 }
 
@@ -249,7 +250,7 @@ TEST_F(QueryTest, SetResult_ProvenUpdate) {
   const MateLen len = MateLen{334};
   const SearchResult result = SearchResult::MakeFinal<true>(hand, len, 1);
 
-  entries_[0].Init(board_key_, hand);
+  entries_[0].Init(board_key_, hand, kDepthMax);
   query_.SetResult(result);
   EXPECT_EQ(entries_[0].ProvenLen(), len);
 }
@@ -269,7 +270,7 @@ TEST_F(QueryTest, SetResult_RepetitionUpdate) {
   const SearchAmount amount{334};
   const SearchResult result = SearchResult::MakeRepetition(hand_, MateLen{334}, amount, 0);
 
-  entries_[2].Init(board_key_, hand_);
+  entries_[2].Init(board_key_, hand_, kDepthMax);
   query_.SetResult(result);
   EXPECT_EQ(entries_[2].Pn(), 1);
   EXPECT_EQ(entries_[2].Dn(), 1);
