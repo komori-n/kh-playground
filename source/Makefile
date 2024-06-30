@@ -191,6 +191,7 @@ endif
 ifneq (,$(findstring clang++,$(COMPILER)))
 	ifeq ($(OS),Windows_NT)
 		LDFLAGS += -fuse-ld=lld
+		CPPFLAGS += -femulated-tls
 	endif
 endif
 
