@@ -71,6 +71,12 @@ thread_local inline std::uint32_t tl_thread_id = 0;
 /// 自分は GC 担当スレッドかどうか
 thread_local inline bool tl_gc_thread = false;
 
+#if defined(__has_builtin)
+#if __has_builtin(__builtin_add_overflow)
+#define KOMORI_HAS_BUILTIN_ADD_OVERFLOW
+#endif
+#endif
+
 /**
  * @brief `T` 型の値を足し合わせ、計算結果を `T` 型の範囲に丸める
  * @tparam T  整数型
@@ -82,7 +88,7 @@ template <typename T>
 constexpr inline T SaturatedAdd(T lhs, T rhs) noexcept {
   static_assert(std::is_integral_v<T>);
 
-#if defined(__has_builtin) && __has_builtin(__builtin_add_overflow)
+#if defined(KOMORI_HAS_BUILTIN_ADD_OVERFLOW)
   T result{};
   const bool overflow = __builtin_add_overflow(lhs, rhs, &result);
   if (overflow) {
