@@ -17,7 +17,7 @@ jobs:
       matrix:
         edition:
           - USER_ENGINE
-        compiler: [clang++-14, clang++-12, clang++-11]
+        compiler: [clang++-15, clang++-14, clang++-12]
         target: ["normal"]
         archcpu:
           [
@@ -36,12 +36,6 @@ jobs:
         uses: actions/checkout@v2
         with:
           path: main
-      - name: install clang-11
-        run: |
-          brew install llvm@11
-          ln -s /usr/local/opt/llvm@11/bin/clang++ /usr/local/bin/clang++-11
-          export LDFLAGS="-L/usr/local/opt/llvm@11/lib"
-          export CPPFLAGS="-I/usr/local/opt/llvm@11/include"
         if: ${{ matrix.compiler == 'clang++-11' }}
       - name: install clang-12
         run: |
@@ -58,6 +52,14 @@ jobs:
           export LDFLAGS="-L/usr/local/opt/llvm@14/lib"
           export CPPFLAGS="-I/usr/local/opt/llvm@14/include"
         if: ${{ matrix.compiler == 'clang++-14' }}
+
+      - name: install clang-15
+        run: |
+          brew install llvm@15
+          ln -s /usr/local/opt/llvm@15/bin/clang++ /usr/local/bin/clang++-15
+          export LDFLAGS="-L/usr/local/opt/llvm@15/lib"
+          export CPPFLAGS="-I/usr/local/opt/llvm@15/include"
+        if: ${{ matrix.compiler == 'clang++-15' }}
 
       - name: make
         run: ./main/script/build.sh -e ${{ matrix.edition }} -c ${{ matrix.compiler }} -t ${{ matrix.target }} -a ${{ matrix.archcpu }} -o mac
