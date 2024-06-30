@@ -42,6 +42,10 @@ jobs:
             archcpu: NO_SSE
           - target: gensfen
             archcpu: NO_SSE
+          # https://stackoverflow.com/questions/56866977/linux-cross-compile-fails-with-undefined-reference-to-emutls-v-zst11-once-c
+          # clang++-18 + LTO + thread_local だとリンクエラーになる
+          # 現状ではこれは回避できないようなので、コンパイルを無効にしておく
+          - compiler: clang++
 
     steps:
       - name: Checkout own repository

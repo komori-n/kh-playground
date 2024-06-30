@@ -41,6 +41,7 @@ jobs:
             archcpu: "SSE41,SSSE3,SSE2,NO_SSE"
           - target: gensfen
             archcpu: "SSE41,SSSE3,SSE2,NO_SSE"
+          - compiler: clang++
     steps:
       - name: Checkout own repository
         uses: actions/checkout@v2
