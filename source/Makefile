@@ -190,7 +190,7 @@ endif
 # MSYS2 clang++ で -flto 指定時にリンクを行えない問題の回避
 ifneq (,$(findstring clang++,$(COMPILER)))
 	ifeq ($(OS),Windows_NT)
-		LDFLAGS += -fuse-ld=lld -femulated-tls
+		LDFLAGS += -femulated-tls
 		CPPFLAGS += -femulated-tls
 	endif
 endif
