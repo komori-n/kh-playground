@@ -21,6 +21,7 @@ jobs:
           - clang++-15
           - clang++-16
           - clang++-17
+          - clang++-18
         target: ["normal"]
         archcpu:
           - "AVX512,AVX2,SSE42,SSE41"
@@ -106,6 +107,16 @@ jobs:
           sudo cat /etc/apt/sources.list
           sudo ls -R /etc/apt/sources.list.d
         if: ${{ matrix.compiler == 'clang++-17' }}
+
+      - name: install clang-18
+        run: |
+          # install clang-18
+          wget https://apt.llvm.org/llvm.sh
+          sudo bash ./llvm.sh 18 all
+          sudo apt install build-essential libopenblas-dev
+          sudo cat /etc/apt/sources.list
+          sudo ls -R /etc/apt/sources.list.d
+        if: ${{ matrix.compiler == 'clang++-18' }}
 
       - name: install aarch64-linux-gnu-g++
         run: |

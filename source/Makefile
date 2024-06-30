@@ -153,6 +153,10 @@ ifneq (,$(findstring clang++,$(COMPILER)))
 	# → 本当に消してしまっても大丈夫か？
 	WCPPFLAGS += -fno-threadsafe-statics
 
+	ifeq (,$(findstring APPLE,$(TARGET_CPU)))
+		LDFLAGS       += -fuse-ld=lld
+	endif
+
 else
 	ifneq (,$(findstring g++,$(COMPILER)))
 		# mingw g++ で AVX512 向けビルドを行おうとするとエラーになる問題の回避
@@ -190,7 +194,7 @@ endif
 # MSYS2 clang++ で -flto 指定時にリンクを行えない問題の回避
 ifneq (,$(findstring clang++,$(COMPILER)))
 	ifeq ($(OS),Windows_NT)
-		LDFLAGS += -femulated-tls
+		LDFLAGS += fuse-ld=lld -femulated-tls
 		CPPFLAGS += -femulated-tls
 	endif
 endif
