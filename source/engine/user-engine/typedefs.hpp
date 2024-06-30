@@ -118,7 +118,7 @@ template <typename T>
 constexpr inline T SaturatedSubtract(T lhs, T rhs) noexcept {
   static_assert(std::is_integral_v<T>);
 
-#if defined(__has_builtin) && __has_builtin(__builtin_sub_overflow)
+#if defined(KOMORI_HAS_BUILTIN_ADD_OVERFLOW)
   T result{};
   const bool overflow = __builtin_sub_overflow(lhs, rhs, &result);
   if (overflow) {
@@ -148,7 +148,7 @@ template <typename T>
 constexpr inline T SaturatedMultiply(T lhs, T rhs) noexcept {
   static_assert(std::is_integral_v<T>);
 
-#if defined(__has_builtin) && __has_builtin(__builtin_mul_overflow)
+#if defined(KOMORI_HAS_BUILTIN_ADD_OVERFLOW)
   T result{};
   const bool overflow = __builtin_mul_overflow(lhs, rhs, &result);
   if (overflow) {
