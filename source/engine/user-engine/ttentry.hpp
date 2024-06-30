@@ -371,6 +371,13 @@ class alignas(32) Entry {
   PnDn Pn() const noexcept { return pn_; }
   /// dn
   PnDn Dn() const noexcept { return dn_; }
+
+  void DebugPrint() const {
+    if (hand_ != kNullHand) {
+      sync_cout << pn_ << " " << dn_ << " " << min_depth_ << " " << proven_len_ << " "
+                << static_cast<int>(repetition_state_) << " " << amount_ << sync_endl;
+    }
+  }
   // </テスト用>
 
  private:

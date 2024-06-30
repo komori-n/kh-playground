@@ -360,6 +360,12 @@ class RegularTable {
       }
     }
   }
+
+  void DebugPrint() const {
+    for (const auto& entry : entries_) {
+      entry.DebugPrint();
+    }
+  }
   // </テスト用>
 
  private:
