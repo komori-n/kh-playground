@@ -9,7 +9,8 @@ using komori::MateLen;
 using komori::PnDn;
 using komori::SearchAmount;
 using komori::tt::Entry;
-using komori::tt::detail::kFinalAmountBonus;
+using komori::tt::detail::kDisprovenBonus;
+using komori::tt::detail::kProvenBonus;
 
 TEST(EntryTest, DefaultConstructedInstanceIsNull) {
   Entry entry;
@@ -340,7 +341,7 @@ TEST(EntryTest, UpdateProven_Amount) {
   entry.Init(0x264, HAND_ZERO, kDepthMax);
   entry.UpdateUnknown(264, 26, 4, amount1);
   entry.UpdateProven(MateLen{334}, amount2);
-  EXPECT_EQ(entry.Amount(), amount2 + 334 * kFinalAmountBonus);
+  EXPECT_EQ(entry.Amount(), amount2 + kProvenBonus);
 }
 
 TEST(EntryTest, UpdateDisproven_Amount) {
@@ -350,5 +351,5 @@ TEST(EntryTest, UpdateDisproven_Amount) {
   entry.Init(0x264, HAND_ZERO, kDepthMax);
   entry.UpdateUnknown(264, 26, 4, amount1);
   entry.UpdateDisproven(amount2);
-  EXPECT_EQ(entry.Amount(), amount2 + 10 * kFinalAmountBonus);
+  EXPECT_EQ(entry.Amount(), amount2 + kDisprovenBonus);
 }

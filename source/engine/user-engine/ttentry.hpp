@@ -14,7 +14,8 @@
 namespace komori::tt {
 namespace detail {
 /// 詰み／不詰の探索量のボーナス。これを大きくすることで詰み／不詰エントリが消されづらくなる。
-constexpr inline SearchAmount kFinalAmountBonus{100};
+constexpr inline SearchAmount kProvenBonus{400};
+constexpr inline SearchAmount kDisprovenBonus{500};
 }  // namespace detail
 
 /**
@@ -238,9 +239,12 @@ class alignas(32) Entry {
    * @pre `!IsNull()`
    */
   void SetPossibleRepetition() noexcept {
-    repetition_state_ = RepetitionState::kPossibleRepetition;
-    // 千日手探索中の pn/dn は信用できないのでいったん初期化し直す
-    pn_ = dn_ = 1;
+    if (dn_ != 0) {
+      repetition_state_ = RepetitionState::kPossibleRepetition;
+      // 千日手探索中の pn/dn は信用できないのでいったん初期化し直す
+      amount_ = SaturatedAdd(amount_, 2 * amount_);
+      pn_ = dn_ = 1;
+    }
   }
 
   /**
@@ -258,11 +262,14 @@ class alignas(32) Entry {
    * @pre `IsFor(board_key, hand)` （`board_key`, `hand` は現局面の盤面ハッシュ、持ち駒）
    */
   void UpdateUnknown(Depth depth, PnDn pn, PnDn dn, SearchAmount amount) noexcept {
-    const auto depth16 = static_cast<std::int16_t>(depth);
-    min_depth_.store(std::min(min_depth_.load(std::memory_order_relaxed), depth16), std::memory_order_relaxed);
-    pn_ = pn;
-    dn_ = dn;
-    amount_ = std::max(amount_, amount);
+    if (dn_ > 0) {
+      const auto depth16 = static_cast<std::int16_t>(depth);
+      min_depth_.store(std::min(min_depth_.load(std::memory_order_relaxed), depth16), std::memory_order_relaxed);
+      pn_ = pn;
+      dn_ = dn;
+
+      amount_ = std::max(amount_, amount);
+    }
   }
 
   /**
@@ -273,7 +280,7 @@ class alignas(32) Entry {
    */
   void UpdateProven(MateLen len, SearchAmount amount) noexcept {
     proven_len_ = std::min(proven_len_, MateLen16{len});
-    amount_ = std::max(amount_, SaturatedAdd(amount, len.Len() * detail::kFinalAmountBonus));
+    amount_ = std::max(amount_, SaturatedAdd(amount, detail::kProvenBonus));
   }
 
   /**
@@ -281,9 +288,11 @@ class alignas(32) Entry {
    * @param amount 探索量
    */
   void UpdateDisproven(SearchAmount amount) noexcept {
-    dn_ = 0;
-    pn_ = kInfinitePnDn;
-    amount_ = std::max(amount_, SaturatedAdd(amount, 10 * detail::kFinalAmountBonus));
+    if (dn_ != 0) {
+      dn_ = 0;
+      pn_ = kInfinitePnDn;
+      amount_ = std::max(amount_, SaturatedAdd(amount, detail::kDisprovenBonus));
+    }
   }
 
   /**

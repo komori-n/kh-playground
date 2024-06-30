@@ -262,7 +262,7 @@ TEST_F(QueryTest, SetResult_RepetitionNew) {
   query_.SetResult(result);
   EXPECT_EQ(entries_[0].Pn(), 1);
   EXPECT_EQ(entries_[0].Dn(), 1);
-  EXPECT_EQ(entries_[0].Amount(), 1);
+  EXPECT_EQ(entries_[0].Amount(), 3);
   EXPECT_TRUE(rep_table_.Contains(path_key_));
 }
 
