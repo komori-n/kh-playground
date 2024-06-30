@@ -100,23 +100,21 @@ NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_n
     const std::uint32_t multi_pv = num_found_win_moves + 1;
     in_pv_search_ = false;
     expansion_list_[tl_thread_id].Emplace(tt_, node, MateLen::DepthMax(), true, multi_pv);
-    LocalExpansion* local_expansion = &expansion_list_[tl_thread_id].back();
+    LocalExpansion& local_expansion = expansion_list_[tl_thread_id].back();
 
     SearchResult result;
     while (!monitor_.ShouldStop()) {
       DispatchSearch(node, MateLen::DepthMax(), multi_pv);
-      result = local_expansion->CurrentResult(node);
+      result = local_expansion.CurrentResult(node);
 
       if (result.IsFinal()) {
         break;
       }
-      expansion_list_[tl_thread_id].Pop();
-      expansion_list_[tl_thread_id].Emplace(tt_, node, MateLen::DepthMax(), false, multi_pv);
-      local_expansion = &expansion_list_[tl_thread_id].back();
+      local_expansion.Relookup(tt_, node, MateLen::DepthMax(), false, multi_pv, false);
     }
 
     in_pv_search_ = true;
-    for (auto [move, child_result] : local_expansion->GetAllResults()) {
+    for (auto [move, child_result] : local_expansion.GetAllResults()) {
       if (!child_result.IsFinal() ||
           std::find(searched_moves.begin(), searched_moves.end(), move) != searched_moves.end()) {
         continue;
@@ -143,7 +141,7 @@ NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_n
       }
 
       if (child_result.IsFinal()) {
-        local_expansion->UpdateFinal(child_result, move);
+        local_expansion.UpdateFinal(child_result, move);
       }
       pv_list_.Update(move, child_result, 0, pv_moves_.Moves());
       if (searched_moves.size() == 1 || SearchResultComparer{node.IsRootOrNode()}(child_result, best_child_result) ==
@@ -249,24 +247,23 @@ SearchResult KomoringHeights::ConstructProvenPv(Node& n, MateLen max_len) {
   // 証明駒を使わずにできるだけ短い詰みを LookUp してほしいので、strict_lookup=true にしている
   const std::uint32_t multi_pv = 1;
   expansion_list_[tl_thread_id].Emplace(tt_, n, max_len, false, multi_pv, true);
-  LocalExpansion* local_expansion = &expansion_list_[tl_thread_id].back();
+  LocalExpansion& local_expansion = expansion_list_[tl_thread_id].back();
   // early exit するときに忘れずに local_expansion を開放するための RAII
   Defer release_expansion([this]() { expansion_list_[tl_thread_id].Pop(); });
 
-  SearchResult result = local_expansion->CurrentResult(n);
+  SearchResult result = local_expansion.CurrentResult(n);
   std::uint32_t loop_count = 0;
   while (!result.IsFinal() && !monitor_.ShouldStop()) {
     // mate_len 以下の詰みがあるはずなので頑張って探す
     // 前の週で別スレッドが詰みを見つけているかもしれないので、改めて展開しなおす
-    expansion_list_[tl_thread_id].Pop();
-    expansion_list_[tl_thread_id].Emplace(tt_, n, max_len, false, multi_pv, true);
+    local_expansion.Relookup(tt_, n, max_len, false, multi_pv, true);
 
     // sub thread たちにも `n` 以下 `mate_len_` 手詰めを見つけるのを手伝ってもらう
     const MateLen max_mate_len = DispatchSearch(n, max_len, multi_pv);
 
     // sub thread の結果を result にコピーすることもできるが、メインスレッドの local expansion の状態が
     // 狂ってしまうので、あえて何もしない
-    result = local_expansion->CurrentResult(n);
+    result = local_expansion.CurrentResult(n);
 
     if (++loop_count % 30 == 0) {
       // 無駄合は確率で消える可能性があるので、max_len で詰むはずでも詰みを見つけれられないことがある。
@@ -297,7 +294,7 @@ SearchResult KomoringHeights::ConstructProvenPv(Node& n, MateLen max_len) {
 
   SearchResult child_result;
   do {
-    const Move best_move = local_expansion->BestMove();
+    const Move best_move = local_expansion.BestMove();
     pv_moves_.AddMove(best_move, n.GetDepth());
 
     // DoMove() をするとループに遭遇したときに回避できないので、千日手判定なし版を使う
@@ -305,8 +302,8 @@ SearchResult KomoringHeights::ConstructProvenPv(Node& n, MateLen max_len) {
     child_result = ConstructProvenPv(n, result.Len() - 1);
     n.UndoMoveNoRepetition();
 
-    local_expansion->UpdateBestChild(child_result);
-    result = local_expansion->CurrentResult(n);
+    local_expansion.UpdateBestChild(child_result);
+    result = local_expansion.CurrentResult(n);
 
     // 子局面で見つけた手数（mate_path の depth+1 以降に書かれた手数）が現局面の詰み手数と一致しているか確認する
     // もし差異があったら、現局面の詰み手数が間違っていた可能性があるのでもう一度探索する
@@ -317,19 +314,17 @@ SearchResult KomoringHeights::ConstructProvenPv(Node& n, MateLen max_len) {
 
 Move KomoringHeights::GetEvasion(Node& n) {
   expansion_list_[tl_thread_id].Emplace(tt_, n, MateLen::DepthMax(), false, 1, true);
-  LocalExpansion* local_expansion = &expansion_list_[tl_thread_id].back();
+  LocalExpansion& local_expansion = expansion_list_[tl_thread_id].back();
   while (!monitor_.ShouldStop()) {
     DispatchSearch(n, MateLen::DepthMax(), 1);
-    if (local_expansion->CurrentResult(n).IsFinal()) {
+    if (local_expansion.CurrentResult(n).IsFinal()) {
       break;
     }
 
-    expansion_list_[tl_thread_id].Pop();
-    expansion_list_[tl_thread_id].Emplace(tt_, n, MateLen::DepthMax(), false, 1, true);
-    local_expansion = &expansion_list_[tl_thread_id].back();
+    local_expansion.Relookup(tt_, n, MateLen::DepthMax(), false, 1, true);
   }
 
-  const Move evasion = local_expansion->BestMove();
+  const Move evasion = local_expansion.BestMove();
   expansion_list_[tl_thread_id].Pop();
   return evasion;
 }

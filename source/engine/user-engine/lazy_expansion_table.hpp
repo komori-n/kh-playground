@@ -56,6 +56,8 @@ class LazyExpansionTable {
     }
   }
 
+  LazyExpansionTable() = default;
+
   /**
    * @brief `i_raw` の直後に展開すべき手のインデックスを返す。
    * @param i_raw 手の `index`

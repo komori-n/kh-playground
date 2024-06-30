@@ -116,6 +116,7 @@ class LocalExpansion {
    * @param len 残り詰み手数
    * @param first_search 初回探索なら `true`。`true` なら高速 1 手詰めルーチンを走らせる。
    * @param multi_pv 勝ちになる手をいくつ見つけるか。1以上でなければならない
+   * @param strict_lookup できるだけ短い詰み手順がほしいなら true。無駄合のような重い処理が有効になる
    */
   LocalExpansion(tt::TranspositionTable& tt,
                  const Node& n,
@@ -123,16 +124,54 @@ class LocalExpansion {
                  bool first_search,
                  std::uint32_t multi_pv = 1,
                  bool strict_lookup = false)
-      : or_node_{n.IsOrNode()}, mp_{n, true}, len_{len}, multi_pv_{multi_pv}, lazy_expansion_{n, mp_} {
+      : or_node_{n.IsOrNode()}, mp_{n, true} {
     for (const auto& [i_raw, move] : WithIndex<std::uint32_t>(mp_)) {
-      // 理由はよくわからないが、result の直前に query を作るより、ここで query を作るほうが少しだけ速い
-      const auto& query = queries_[i_raw] = tt.BuildChildQuery(n, move.move);
+      queries_[i_raw] = tt.BuildChildQuery(n, move.move);
+    }
+
+    Relookup(tt, n, len, first_search, multi_pv, strict_lookup);
+  }
+
+  /// Copy constructor(delete)
+  LocalExpansion(const LocalExpansion&) = delete;
+  /// Move constructor(delete)
+  LocalExpansion(LocalExpansion&&) = delete;
+  /// Copy assign operator(delete)
+  LocalExpansion& operator=(const LocalExpansion&) = delete;
+  /// Move assign operator(delete)
+  LocalExpansion& operator=(LocalExpansion&&) = delete;
+  /// Destructor(default)
+  ~LocalExpansion() = default;
+
+  /**
+   * @brief LocalExpansion を構築しなおす
+   * @param tt  置換表
+   * @param n   現局面
+   * @param len 残り詰み手数
+   * @param first_search 初回探索なら `true`。`true` なら高速 1 手詰めルーチンを走らせる。
+   * @param multi_pv 勝ちになる手をいくつ見つけるか。1以上でなければならない
+   * @param strict_lookup できるだけ短い詰み手順がほしいなら true。無駄合のような重い処理が有効になる
+   */
+  void Relookup(tt::TranspositionTable& tt,
+                const Node& n,
+                MateLen len,
+                bool first_search,
+                std::uint32_t multi_pv,
+                bool strict_lookup) {
+    len_ = len;
+    multi_pv_ = multi_pv;
+    lazy_expansion_ = LazyExpansionTable{n, mp_};
+    does_have_old_child_ = false;
+    excluded_moves_ = 0;
+    idx_.clear();
+    for (const auto [i_raw, move] : WithIndex<std::uint32_t>(mp_)) {
+      const tt::Query& query = queries_[i_raw];
       auto& result = results_[i_raw];
 
       if (const auto maybe_depth = n.IsRepetitionOrInferiorAfter(move.move)) {
-        result = SearchResult::MakeRepetition(n.OrHandAfter(move.move), len - 1, 1, *maybe_depth);
+        result = SearchResult::MakeRepetition(n.OrHandAfter(move.move), len_ - 1, 1, *maybe_depth);
       } else {
-        const MateLen lookup_len = len < MateLen{1} ? MateLen::DepthMax() : len - 1;
+        const MateLen lookup_len = len_ < MateLen{1} ? MateLen::DepthMax() : len_ - 1;
         result = query.LookUp(does_have_old_child_, lookup_len, MakeInitialEvaluationFunc(n, move), strict_lookup);
 
         if (!result.IsFinal() && lazy_expansion_.HasPrev(i_raw)) {
@@ -143,7 +182,7 @@ class LocalExpansion {
 
       idx_.Push(i_raw);
       if (!or_node_ && is_drop(move.move) && strict_lookup && IsRedundantDrop(tt, n, i_raw)) {
-        result = SearchResult::MakeFinal<true>(n.OrHand(), len - 1, result.Amount());
+        result = SearchResult::MakeFinal<true>(n.OrHand(), len_ - 1, result.Amount());
         idx_.Pop();
         redundant_drop_idx_.Push(i_raw);
         goto FOUND_FINAL;
@@ -177,17 +216,6 @@ class LocalExpansion {
     std::sort(idx_.begin(), idx_.end(), MakeComparer());
     RecalcDelta();
   }
-
-  /// Copy constructor(delete)
-  LocalExpansion(const LocalExpansion&) = delete;
-  /// Move constructor(delete)
-  LocalExpansion(LocalExpansion&&) = delete;
-  /// Copy assign operator(delete)
-  LocalExpansion& operator=(const LocalExpansion&) = delete;
-  /// Move assign operator(delete)
-  LocalExpansion& operator=(LocalExpansion&&) = delete;
-  /// Destructor(default)
-  ~LocalExpansion() = default;
 
   /**
    * @brief 合法手がないかどうか
@@ -637,7 +665,7 @@ class LocalExpansion {
 
   const bool or_node_;                 ///< 現局面が OR node かどうか
   const MovePicker mp_;                ///< 現局面の合法手
-  const MateLen len_;                  ///< 現局面における残り探索手数
+  MateLen len_;                        ///< 現局面における残り探索手数
   std::uint32_t multi_pv_;             ///< MultiPv の値。1以上でなければならない
   LazyExpansionTable lazy_expansion_;  ///< 後回しにしている手のグラフ構造
 
@@ -647,10 +675,10 @@ class LocalExpansion {
   std::array<tt::Query, kMaxCheckMovesPerNode> queries_;
 
   /// 現局面の評価値が古い探索情報に基づくものかどうか。TCA の探索延長の判断に用いる。
-  bool does_have_old_child_{false};
+  bool does_have_old_child_;
 
-  PnDn delta_max_{};        ///< δ == kInfinitePnDn でない子の中で最大の δ 値
-  PnDn valid_child_num_{};  ///< 有効な子（idx_ に入っていて、かつfinalでない子）の数
+  PnDn delta_max_;        ///< δ == kInfinitePnDn でない子の中で最大の δ 値
+  PnDn valid_child_num_;  ///< 有効な子（idx_ に入っていて、かつfinalでない子）の数
 
   /// 現在有効な生添字の一覧。「良さ順」で並んでいる。
   InlineStack<std::uint32_t, kMaxCheckMovesPerNode> idx_;
@@ -660,7 +688,7 @@ class LocalExpansion {
   /// 勝ちになる手を見つけた個数
   /// multi_pv_ == 1 のときは、この値は常に 0 である。multi_pv_ > 1 のとき、勝ち（phi==0）を見つけた後に探索を続ける
   /// 際に用いる。常に excluded_moves_ <= multi_pv_ - 1 かつ excluded_moves_ <= mp_.size() である。
-  std::uint32_t excluded_moves_{0};
+  std::uint32_t excluded_moves_;
 };
 }  // namespace komori
 
