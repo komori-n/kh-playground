@@ -153,7 +153,7 @@ ifneq (,$(findstring clang++,$(COMPILER)))
 	# → 本当に消してしまっても大丈夫か？
 	WCPPFLAGS += -fno-threadsafe-statics
 
-	ifeq (,$(findstring APPLE,$(TARGET_CPU)))
+	ifeq (,$(findstring M1,$(TARGET_CPU)))
 		LDFLAGS       += -fuse-ld=lld
 	endif
 
