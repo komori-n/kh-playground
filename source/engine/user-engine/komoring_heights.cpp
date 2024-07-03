@@ -35,7 +35,6 @@ Move SelectNextBestmove(const LocalExpansion& local_expansion, const std::vector
 
 void KomoringHeights::Init(const EngineOption& option, std::uint32_t num_threads) {
   option_ = option;
-  barrier_.Initialize(option_.threads);
   tt_.Resize(option_.hash_mb);
   expansion_list_.resize(num_threads);
   expansion_list_.shrink_to_fit();
@@ -76,13 +75,7 @@ void KomoringHeights::NewSearch(const Position& n, bool is_root_or_node) {
     tt_.Clear();
   }
 
-  moves_from_root_.clear();
-  mate_len_ = MateLen::DepthMax();
-  should_break_main_loop_.store(false, std::memory_order_relaxed);
-  multi_pv_ = option_.multi_pv;
-
-  search_promises_.resize(option_.threads);
-  search_futures_.resize(option_.threads);
+  worker_pool_.Reset();
 }
 
 NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_node) {
@@ -161,8 +154,7 @@ NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_n
   }
 
   // 待機している sub thread を解放する
-  should_break_main_loop_ = true;
-  barrier_.Await();
+  worker_pool_.Stop();
 
   if (num_legal_moves == 0) {
     node_state = node.IsOrNode() ? NodeState::kDisproven : NodeState::kProven;
@@ -171,50 +163,37 @@ NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_n
   return node_state;
 }
 
-NodeState KomoringHeights::SearchSubThread(const Position& n, bool is_root_or_node) {
+void KomoringHeights::SearchSubThread(const Position& n, bool is_root_or_node) {
   auto& nn = const_cast<Position&>(n);
   Node node{nn, is_root_or_node};
 
-  barrier_.Await();
-  while (!should_break_main_loop_) {
-    // 探索本体
-    RollForward(node, moves_from_root_);
-    const SearchResult reuslt = SearchEntry(node, mate_len_, multi_pv_);
-
-    monitor_.Stop();
-    RollBack(node, moves_from_root_);
-
-    search_promises_[tl_thread_id].set_value(reuslt);
-    barrier_.Await();
-  }
-
-  return NodeState::kUnknown;
+  // メインスレッドの言いなりになって働く
+  worker_pool_.Work(node);
 }
 
-MateLen KomoringHeights::DispatchSearch(Node& n, MateLen len, std::uint32_t multi_pv) {
+void KomoringHeights::DispatchSearch(Node& n, MateLen len, std::uint32_t multi_pv) {
   const auto& moves = n.MovesFromStart();
-  moves_from_root_ = {moves.begin(), moves.end()};
-  mate_len_ = len;
-  multi_pv_ = multi_pv;
+  const std::vector<Move> moves_from_root(moves.begin(), moves.end());
 
-  for (int i = 0; i < option_.threads; ++i) {
-    search_promises_[i] = std::promise<SearchResult>{};
-    search_futures_[i] = search_promises_[i].get_future();
+  Barrier barrier{static_cast<std::size_t>(option_.threads)};
+  for (int i = 1; i < option_.threads; ++i) {
+    worker_pool_.AddTask([this, len, multi_pv, &moves_from_root, &barrier](Node& n) {
+      RollForward(n, moves_from_root);
+      SearchEntry(n, len, multi_pv);
+      monitor_.Stop();
+
+      RollBack(n, moves_from_root);
+      barrier.Await();
+    });
   }
-  barrier_.Await();
-  search_promises_[tl_thread_id].set_value(SearchEntryNoEmplace(n, len));
+
+  sync_cout << "info string start searching" << sync_endl;
+  SearchEntryNoEmplace(n, len);
   monitor_.Stop();
-
-  MateLen result_len = MateLen::DepthMax();
-  for (int i = 0; i < option_.threads; ++i) {
-    const SearchResult thread_result = search_futures_[i].get();
-    if (thread_result.Pn() == 0) {
-      result_len = std::min(result_len, thread_result.Len());
-    }
-  }
+  sync_cout << "info string await start" << sync_endl;
+  barrier.Await();
+  sync_cout << "info string await end" << sync_endl;
   monitor_.ResetStop();
-
-  return result_len;
 }
 
 SearchResult KomoringHeights::SearchEntry(Node& n, MateLen len, std::uint32_t multi_pv) {
@@ -259,7 +238,8 @@ SearchResult KomoringHeights::ConstructProvenPv(Node& n, MateLen max_len) {
     local_expansion.Relookup(tt_, n, max_len, false, multi_pv, true);
 
     // sub thread たちにも `n` 以下 `mate_len_` 手詰めを見つけるのを手伝ってもらう
-    const MateLen max_mate_len = DispatchSearch(n, max_len, multi_pv);
+    const auto r = SearchEntryNoEmplace(n, max_len);
+    const MateLen max_mate_len = r.Pn() == 0 ? r.Len() : max_len + 2;
 
     // sub thread の結果を result にコピーすることもできるが、メインスレッドの local expansion の状態が
     // 狂ってしまうので、あえて何もしない
@@ -269,7 +249,7 @@ SearchResult KomoringHeights::ConstructProvenPv(Node& n, MateLen max_len) {
       // 無駄合は確率で消える可能性があるので、max_len で詰むはずでも詰みを見つけれられないことがある。
       // そんなときは、詰み手数を伸ばして親局面から探索をやり直す
 
-      max_len = option_.threads == 1 ? max_len + 2 : max_mate_len;
+      max_len = max_mate_len;
     }
   }
 
@@ -316,7 +296,7 @@ Move KomoringHeights::GetEvasion(Node& n) {
   expansion_list_[tl_thread_id].Emplace(tt_, n, MateLen::DepthMax(), false, 1, true);
   LocalExpansion& local_expansion = expansion_list_[tl_thread_id].back();
   while (!monitor_.ShouldStop()) {
-    DispatchSearch(n, MateLen::DepthMax(), 1);
+    SearchEntryNoEmplace(n, MateLen::DepthMax());
     if (local_expansion.CurrentResult(n).IsFinal()) {
       break;
     }

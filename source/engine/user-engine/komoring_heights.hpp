@@ -17,6 +17,7 @@
 #include "search_result.hpp"
 #include "transposition_table.hpp"
 #include "usi_info.hpp"
+#include "worker_pool.hpp"
 
 namespace komori {
 /**
@@ -75,9 +76,8 @@ class KomoringHeights {
    * @brief 詰め探索を行う（メインスレッド以外）
    * @param n 現局面
    * @param is_root_or_node `n` が OR node かどうか
-   * @return 探索結果
    */
-  NodeState SearchSubThread(const Position& n, bool is_root_or_node);
+  void SearchSubThread(const Position& n, bool is_root_or_node);
 
  private:
   /**
@@ -85,11 +85,10 @@ class KomoringHeights {
    * @param n 現局面
    * @param len 詰み手数
    * @param multi_pv Multi PV の数
-   * @return 詰みの場合は詰み手数、詰まない場合は `MateLen::kInfinite`
    * @pre メインスレッドから呼び出すこと
    * @pre `n` は LocalExpansion が展開されていること
    */
-  MateLen DispatchSearch(Node& n, MateLen len, std::uint32_t multi_pv);
+  void DispatchSearch(Node& n, MateLen len, std::uint32_t multi_pv);
 
   /**
    * @brief 局面 `n` が `len` 手以下で詰むかどうかを探索する
@@ -149,12 +148,6 @@ class KomoringHeights {
 
   tt::TranspositionTable tt_;  ///< 置換表
   EngineOption option_;        ///< エンジンオプション
-  /// スレッド同期用バリア
-  /// 各ループの末尾で全スレッドが待つために使用する。
-  ///
-  /// サブスレッドは、 search_promises_ に結果を書いた直後に barrier_ で待機する。
-  /// メインスレッドは、 search_futures_ で結果を受け取り、次に探索すべき局面を決めて barrier_ で全スレッドに通知する。
-  Barrier barrier_;
 
   SearchMonitor monitor_;                                     ///< 探索モニター
   ScoreMaker score_maker_{ScoreCalculationMethod::kPonanza};  ///< 評価値を作成するオブジェクト
@@ -167,14 +160,7 @@ class KomoringHeights {
   bool in_pv_search_{false};  ///< PV探索中かどうか
   MovePath pv_moves_;         ///< PVの手順
 
-  std::atomic<bool> should_break_main_loop_{false};  ///< メインループを抜けるかどうか
-  // sub thread が探索すべき局面。サブスレッドは mutex で排他せずに読むため、メインスレッドから起床を命じるときは
-  // race condition にならないように注意する必要がある
-  std::vector<Move> moves_from_root_;                        ///< 探索開始局面
-  MateLen mate_len_{MateLen::Zero()};                        ///< 探索手数
-  std::uint32_t multi_pv_{1};                                ///< Multi PV の数
-  std::vector<std::promise<SearchResult>> search_promises_;  /// 各スレッドの探索結果を送る promise
-  std::vector<std::future<SearchResult>> search_futures_;    /// 各スレッドの探索結果を受け取る future
+  WorkerPool worker_pool_;  ///< WorkerPool
 };
 }  // namespace komori
 

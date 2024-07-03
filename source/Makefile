@@ -151,11 +151,6 @@ ifneq (,$(findstring clang++,$(COMPILER)))
 	# static 変数を初期化したかを pthread_mutex_t でロックを取って確認し、
 	# 最初の実行なら初期化するスレッドセーフなコードを生成するためのもの。
 	# → 本当に消してしまっても大丈夫か？
-	WCPPFLAGS += -fno-threadsafe-statics
-
-	ifeq (,$(findstring M1,$(TARGET_CPU)))
-		LDFLAGS       += -fuse-ld=lld
-	endif
 
 else
 	ifneq (,$(findstring g++,$(COMPILER)))
