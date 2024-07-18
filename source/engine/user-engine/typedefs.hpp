@@ -167,7 +167,9 @@ constexpr inline T SaturatedMultiply(T lhs, T rhs) noexcept {
       return kMax;
     }
   } else if (lhs < 0 && rhs < 0) {
-    if (kMax / lhs > rhs) {
+    if (lhs == -1) {
+      return rhs == kMin ? kMax : -rhs;
+    } else if (kMax / lhs > rhs) {
       return kMax;
     }
   } else {
