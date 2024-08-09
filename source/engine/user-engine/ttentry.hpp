@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstdint>
 
+#include "komori/saturation_arithmetic.hpp"
 #include "mate_len.hpp"
 #include "shared_exclusive_lock.hpp"
 #include "typedefs.hpp"
@@ -242,7 +243,7 @@ class alignas(32) Entry {
     if (dn_ != 0) {
       repetition_state_ = RepetitionState::kPossibleRepetition;
       // 千日手探索中の pn/dn は信用できないのでいったん初期化し直す
-      amount_ = SaturatedAdd(amount_, 2 * amount_);
+      amount_ = add_sat(amount_, 2 * amount_);
       pn_ = dn_ = 1;
     }
   }
@@ -280,7 +281,7 @@ class alignas(32) Entry {
    */
   void UpdateProven(MateLen len, SearchAmount amount) noexcept {
     proven_len_ = std::min(proven_len_, MateLen16{len});
-    amount_ = std::max(amount_, SaturatedAdd(amount, detail::kProvenBonus));
+    amount_ = std::max(amount_, add_sat(amount, detail::kProvenBonus));
   }
 
   /**
@@ -291,7 +292,7 @@ class alignas(32) Entry {
     if (dn_ != 0) {
       dn_ = 0;
       pn_ = kInfinitePnDn;
-      amount_ = std::max(amount_, SaturatedAdd(amount, detail::kDisprovenBonus));
+      amount_ = std::max(amount_, add_sat(amount, detail::kDisprovenBonus));
     }
   }
 

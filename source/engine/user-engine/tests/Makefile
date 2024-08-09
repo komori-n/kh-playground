@@ -20,6 +20,7 @@ INCLUDE = -I$(GTEST_DIR)/include/gtest/*.h \
           -I$(GMOCK_DIR)/include/gmock/*.h \
           -I$(GMOCK_DIR)/include/gmock/internal/*.h \
           -I../../../ \
+          -I../../../../third-party/saturation_arithmetic \
           -I../
 
 ifeq ($(shell uname),Linux)

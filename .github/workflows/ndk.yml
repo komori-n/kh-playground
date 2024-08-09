@@ -26,6 +26,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           path: main
+          submodules: true
 
       - name: ndk-build
         run: ./main/script/android_build.sh -e ${{ matrix.edition }}

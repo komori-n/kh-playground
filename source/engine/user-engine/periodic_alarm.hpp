@@ -6,6 +6,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include "komori/saturation_arithmetic.hpp"
 #include "typedefs.hpp"
 
 namespace komori {
@@ -37,7 +38,7 @@ class PeriodicAlarm {
    */
   void Start(std::uint64_t interval_ms) {
     check_skip_remain_ = kCheckSkip;
-    next_notify_tp_ = SaturatedAdd(Now(), interval_ms);
+    next_notify_tp_ = add_sat(Now(), interval_ms);
     interval_ms_ = interval_ms;
   }
 
@@ -66,7 +67,7 @@ class PeriodicAlarm {
       return false;
     }
 
-    next_notify_tp_ = SaturatedAdd(now, interval_ms_);
+    next_notify_tp_ = add_sat(now, interval_ms_);
     return true;
   }
 

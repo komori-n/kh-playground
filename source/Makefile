@@ -94,6 +94,7 @@ else
   CPPFLAGS   = -std=c++17 -fno-exceptions -Wunused-variable -Wextra -O0 -MMD -MP
 endif
 
+CPPFLAGS += -I../third-party/saturation_arithmetic
 WCPPFLAGS  =
 LDFLAGS  = $(EXTRA_LDFLAGS)
 LIBS     =

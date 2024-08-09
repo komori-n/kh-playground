@@ -7,3 +7,6 @@
 [submodule "third-party/benchmark"]
 	path = third-party/benchmark
 	url = https://github.com/google/benchmark.git
+[submodule "third-party/saturation_arithmetic"]
+	path = third-party/saturation_arithmetic
+	url = git@github.com:komori-n/saturation_arithmetic.git

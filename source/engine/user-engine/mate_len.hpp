@@ -6,6 +6,7 @@
 
 #include <ostream>
 
+#include "komori/saturation_arithmetic.hpp"
 #include "typedefs.hpp"
 
 namespace komori {
@@ -78,7 +79,7 @@ class MateLenImpl : DefineNotEqualByEqual<MateLenImpl<T>>, DefineComparisonOpera
   static constexpr MateLenImpl DepthMax() noexcept { return MateLenImpl{kDepthMax}; }
 
   /// 詰み手数を返す
-  constexpr T Len() const noexcept { return SaturatedSubtract(len_plus_ofs_, kOffset); }
+  constexpr T Len() const noexcept { return sub_sat(len_plus_ofs_, kOffset); }
 
   /// 後置インクリメント
   constexpr MateLenImpl& operator++() noexcept {

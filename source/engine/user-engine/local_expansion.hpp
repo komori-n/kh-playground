@@ -11,6 +11,7 @@
 #include "hands.hpp"
 #include "initial_estimation.hpp"
 #include "inline_stack.hpp"
+#include "komori/saturation_arithmetic.hpp"
 #include "lazy_expansion_table.hpp"
 #include "move_picker.hpp"
 #include "node.hpp"
@@ -498,9 +499,7 @@ class LocalExpansion {
    * @brief 現局面の delta しきい値が `thdelta` のとき、子局面の delta しきい値を計算する
    * @param thdelta 現局面の delta しきい値
    */
-  PnDn NewThdeltaForBestMove(PnDn thdelta) const {
-    return SaturatedSubtract<PnDn>(thdelta, kPnDnUnit * (valid_child_num_ - 1));
-  }
+  PnDn NewThdeltaForBestMove(PnDn thdelta) const { return sub_sat<PnDn>(thdelta, kPnDnUnit * (valid_child_num_ - 1)); }
   // </PnDn>
 
   /**
