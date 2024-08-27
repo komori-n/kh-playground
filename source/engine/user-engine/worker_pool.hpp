@@ -53,10 +53,10 @@ class WorkerPool {
     }
   }
   /// タスクを追加する
-  void AddTask(const Task& task) {
+  void AddTask(Task task) {
     {
       std::lock_guard lock{mutex_};
-      task_queue_.push(task);
+      task_queue_.push(std::move(task));
     }
     cv_.notify_one();
   }
