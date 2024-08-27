@@ -65,6 +65,7 @@ void KomoringHeights::NewSearch(const Position& n, bool is_root_or_node) {
   }
 
   worker_pool_.Reset();
+  barrier_.Initialize(option_.threads);
 }
 
 NodeState KomoringHeights::SearchMainThread(const Position& n, bool is_root_or_node) {
@@ -164,15 +165,14 @@ void KomoringHeights::DispatchSearch(Node& n, MateLen len, std::uint32_t multi_p
   const auto& moves = n.MovesFromStart();
   const std::vector<Move> moves_from_root(moves.begin(), moves.end());
 
-  auto barrier = std::make_shared<Barrier>(option_.threads);
   for (int i = 1; i < option_.threads; ++i) {
-    worker_pool_.AddTask([this, len, multi_pv, &moves_from_root, barrier, i](Node& n) {
+    worker_pool_.AddTask([this, len, multi_pv, &moves_from_root, i](Node& n) {
       RollForward(n, moves_from_root);
       SearchEntry(n, len, multi_pv);
       monitor_.Stop();
 
       RollBack(n, moves_from_root);
-      barrier->Await();
+      barrier_.Await();
     });
   }
 
@@ -180,7 +180,7 @@ void KomoringHeights::DispatchSearch(Node& n, MateLen len, std::uint32_t multi_p
   SearchEntryNoEmplace(n, len);
   monitor_.Stop();
   sync_cout << "info string await start" << sync_endl;
-  barrier->Await();
+  barrier_.Await();
   sync_cout << "info string await end" << sync_endl;
   monitor_.ResetStop();
 }

@@ -161,6 +161,7 @@ class KomoringHeights {
   MovePath pv_moves_;         ///< PVの手順
 
   WorkerPool worker_pool_;  ///< WorkerPool
+  Barrier barrier_;
 };
 }  // namespace komori
 
