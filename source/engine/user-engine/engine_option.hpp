@@ -178,11 +178,6 @@ struct EngineOption {
     o["ScoreCalculation"] << USI::Option(detail::score_caluclation_option.Keys(),
                                          detail::score_caluclation_option.DefaultKey());
     o["PostSearchLevel"] << USI::Option(detail::post_search_level.Keys(), detail::post_search_level.DefaultKey());
-
-#if defined(USE_TT_SAVE_AND_LOAD)
-    o["TTReadPath"] << USI::Option("");
-    o["TTWritePath"] << USI::Option("");
-#endif  // defined(USE_TT_SAVE_AND_LOAD)
   }
 
   /**
@@ -200,11 +195,6 @@ struct EngineOption {
 
     score_method = detail::score_caluclation_option.Get(detail::ReadOption<std::string>(o, "ScoreCalculation"));
     post_search_level = detail::post_search_level.Get(detail::ReadOption<std::string>(o, "PostSearchLevel"));
-
-#if defined(USE_TT_SAVE_AND_LOAD)
-    tt_read_path = detail::ReadOption<std::string>(o, "TTReadPath");
-    tt_write_path = detail::ReadOption<std::string>(o, "TTWritePath");
-#endif  // defined(USE_TT_SAVE_AND_LOAD)
   }
 };
 }  // namespace komori

@@ -38,17 +38,6 @@ void KomoringHeights::Init(const EngineOption& option, std::uint32_t num_threads
   tt_.Resize(option_.hash_mb);
   expansion_list_.resize(num_threads);
   expansion_list_.shrink_to_fit();
-
-#if defined(USE_TT_SAVE_AND_LOAD)
-  const auto& tt_read_path = option_.tt_read_path;
-  if (!tt_read_path.empty()) {
-    std::ifstream ifs(tt_read_path, std::ios::binary);
-    if (ifs) {
-      sync_cout << "info string load_path: " << tt_read_path << sync_endl;
-      tt_.Load(ifs);
-    }
-  }
-#endif  // defined(USE_TT_SAVE_AND_LOAD)
 }
 
 void KomoringHeights::Clear() {
